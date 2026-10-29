@@ -1,0 +1,21 @@
+## Interface: 120105
+## Title: Forever RP - Item Emotes
+## Notes: Immersive RP emotes for consumables and Hearthstones. Configurable templates and scopes.
+## Author: Forever RP / ChatGPT
+## Version: 0.9.17-retail-beta
+## IconTexture: Interface\AddOns\ForeverRP\Media\ForeverRP_Icon.tga
+## AddonCompartmentFunc: ForeverRP_OnAddonCompartmentClick
+## SavedVariablesPerCharacter: ForeverRPDB
+Core.lua
+Compat.lua
+Categories.lua
+Samples.lua
+LocalizedSamples.lua
+ExtendedSamples.lua
+AlcoholSamples.lua
+StockSamples.lua
+Inventory.lua
+Scopes.lua
+Emotes.lua
+Config.lua
+Minimap.lua
