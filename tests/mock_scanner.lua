@@ -39,6 +39,8 @@ for _,first in ipairs({'bag','spell'})do
 end
 reset();bags[0]={item(118,1)};a:OnBagsChanged();assert(a.removals[118])
 bags[0]={item(118,2)};a:OnBagsChanged();assert(not a.removals[118],'gain retained removal')
+reset();bags[0]={};a:OnBagsChanged();assert(a.removals[118])
+bags[0]={item(118,1)};a:OnBagsChanged();assert(not a.removals[118],'reacquisition retained removal')
 -- All carried stacks, including bag 5; no bank slots queried.
 reset();bags={[0]={item(118,2)},[5]={item(118,3)},[-1]={item(118,99)}}
 a:ResetInventory();assert(a.inventory[118].count==5)

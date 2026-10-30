@@ -98,9 +98,11 @@ function A:OnBagsChanged()
   local old=self.inventory
   local now=self:Now()
   local changes={}
+  for id,meta in pairs(current) do
+    if meta.count>(old[id] and old[id].count or 0) then self.removals[id]=nil end
+  end
   for id,prev in pairs(old) do
     local newCount=current[id] and current[id].count or 0
-    if newCount>prev.count then self.removals[id]=nil end
     if newCount<prev.count and prev.spell then
       changes[id]=(prev.count-newCount)
       local remove=self.removals[id]
