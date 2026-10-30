@@ -15,6 +15,7 @@ local a=ForeverRP
 a.SetupMinimap=function()end
 local function item(id,n)return {itemID=id,stackCount=n,hyperlink=not missing and '|Hitem:'..id..'|h[Item]|h' or nil}end
 local sends={}
+local realSendForItem=a.SendForItem
 a.SendForItem=function(_,id,link,stock)sends[#sends+1]={id=id,stock=stock}end
 local function reset()
  clock=clock+10;missing=false;bags={[0]={item(118,2)}}
@@ -69,3 +70,49 @@ a.editorStatus={SetText=function()end}
 assert(a:ApplyInlineTemplates('selected')==false)
 assert(a.db.items[118].sayLines==original and a.templateSelection==selection and a.activeTab=='templates')
 io.write('PASS real scanner, ambiguity, metadata, migration, secrets and import regressions\n')
+
+-- Real sender plus real scanner: invalid saved text must never spend cooldown.
+a.SendForItem=realSendForItem
+a.Say=function()end
+function IsInInstance()return true,'party'end
+local chat={}
+C_ChatInfo={SendChatMessage=function(text,channel)chat[#chat+1]={text=text,channel=channel}end}
+for _,language in ipairs({'en','de'})do
+ for _,channel in ipairs({'me','say'})do
+  for _,stock in ipairs({false,true})do
+   for _,order in ipairs({'direct','bag','spell'})do
+    for _,blank in ipairs({'','   ','\t  '})do
+     for _,mixed in ipairs({false,true})do
+      reset();chat={};a.shuffles={}
+      local cfg=a.db.items[118]
+      cfg.outputMode=channel;a.db.language=language
+      local pool=mixed and {blank,42,'  valid RP  ',blank} or {blank}
+      a:SetPhrases(cfg,language,channel,pool,stock)
+      a.db.globalLastEmoteAt=123
+      local function cast()
+       a.eventFrame.event(nil,'UNIT_SPELLCAST_SUCCEEDED','player','blank-test'..clock,111)
+      end
+      if order=='direct'then a:SendForItem(118,nil,stock)
+      else
+       if order=='spell'then cast()end
+       bags[0]=stock and {} or {item(118,1)}
+       a.eventFrame.event(nil,'BAG_UPDATE_DELAYED')
+       if order=='bag'then cast()end
+      end
+      assert(#chat==(mixed and 1 or 0),'invalid pool sent or valid pool suppressed')
+      assert(a.db.globalLastEmoteAt==(mixed and clock or 123),'invalid output spent cooldown')
+      local key=language..'_'..channel
+      local field=(stock and {en_me='outMeLines',en_say='outSayLines',de_me='outDeMeLines',de_say='outDeSayLines'}
+       or {en_me='lines',en_say='sayLines',de_me='deMeLines',de_say='deSayLines'})[key]
+      assert(cfg[field]==pool and pool[1]==blank,'saved original changed')
+      if mixed then
+       assert(pool[2]==42 and pool[3]=='  valid RP  ','mixed originals changed')
+       assert(chat[1].text=='valid RP' and chat[1].channel==(channel=='say' and 'SAY' or 'EMOTE'),'wrong text/channel')
+      end
+     end
+    end
+   end
+  end
+ end
+end
+io.write('PASS blank/mixed persisted pools: regular/Last Item, both languages/channels, direct/event/scanner\n')

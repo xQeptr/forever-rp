@@ -63,8 +63,9 @@ function A:GetPhrases(cfg,language,kind,isStock)
   -- Invalid persisted phrases stay stored, but never reach string operations.
   local valid={}
   for _,line in ipairs(pool) do
-    if type(line)=='string' and self:ParseLines(line) and not line:find('[\r\n]') then
-      valid[#valid+1]=line
+    if type(line)=='string' and not line:find('[\r\n]') then
+      local parsed=self:ParseLines(line)
+      if parsed and #parsed==1 then valid[#valid+1]=parsed[1] end
     end
   end
   return valid

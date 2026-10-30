@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Reject empty/whitespace saved phrases before channel selection without changing original pools or spending cooldown.
 - Fix scanner metadata gaps, reject shared-spell ambiguity and invalidate removals on stock gains (issue #2).
 - Guard restricted cast values, quarantine malformed settings and ignore invalid phrases without deleting originals.
 - Seed missing Last Item pools for the output mode and validate template imports.

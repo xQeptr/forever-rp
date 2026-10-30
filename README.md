@@ -14,6 +14,7 @@ assume every Healthstone use is announced or that Last Item means last charge.
 Before enabling charge support, record client/build, carried stack counts,
 remaining uses (including bank/includeUses API behavior), and spell/bag event
 ordering for 3->2->1->0 uses on both clients. No charge API is inferred here.
+The concrete per-client test checklist is tracked in [issue #4](https://github.com/xQeptr/forever-rp/issues/4).
 
 Real `/say` delivery and item behavior on WoW Forever have not yet been tested.
 Automatic chat may be limited by Blizzard's client restrictions. Do not assume
