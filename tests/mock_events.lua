@@ -6,9 +6,9 @@ local sent={}
 local printed={}
 function print(x) printed[#printed+1]=x end
 local frame={}
-function frame:RegisterEvent(...) end
+function frame:RegisterEvent(event) self.events=self.events or {};self.events[event]=true end
 function frame:RegisterUnitEvent(...) end
-function frame:SetScript(...) end
+function frame:SetScript(event,callback) self[event]=callback end
 function CreateFrame(...) return setmetatable({}, {__index=frame}) end
 function IsInInstance() return false,'none' end
 function InCombatLockdown() return false end
@@ -21,7 +21,7 @@ C_Timer=nil
 SLASH_FOREVERRP1=nil
 SlashCmdList={}
 local function ok(x,msg) if not x then error(msg,2) end end
-local files={'Core.lua','Compat.lua','Categories.lua','Samples.lua','LocalizedSamples.lua','ExtendedSamples.lua','AlcoholSamples.lua','StockSamples.lua','Inventory.lua','Scopes.lua','Emotes.lua','Config.lua','Minimap.lua'}
+local files={'Core.lua','Compat.lua','Categories.lua','Samples.lua','LocalizedSamples.lua','ExtendedSamples.lua','AlcoholSamples.lua','StockSamples.lua','DefaultLibrary.lua','RaceLibrary.lua','Library.lua','Inventory.lua','Scopes.lua','Emotes.lua','Config.lua','Minimap.lua'}
 for _,f in ipairs(files) do assert(loadfile(BASE..f))() end
 local a=ForeverRP
 -- pre-existing settings survive migration.
@@ -34,7 +34,9 @@ ok(a.db.items[118].lines[1]=='uses a {item}.','legacy phrases changed')
 ok(a.db.globalCooldown==30,'default cooldown missing')
 ok(a.db.items[1179].outOfStockEnabled==false, 'explicit legacy off switched on')
 ok(a.db.items[333].outOfStockEnabled==true, 'legacy enabled nil should default on')
-ok(#a.db.items[333].outMeLines==20,'legacy stock pack should be seeded')
+ok(a.db.items[333].outMeLines==nil and #a:GetResolvedPhrases(333,'en','me',true)>0,'stock defaults must resolve without copying')
+-- Isolate event invariants using custom texts; library integration has its own suite.
+for _,entry in ipairs(a.DefaultEntries) do a:SetDefaultDisabled(entry.id,true) end
 local link='|cffffffff|Hitem:118::::::::|h[Minor Healing Potion]|h|r'
 local milk='|cffffffff|Hitem:1179::::::::|h[Ice Cold Milk]|h|r'
 local function tick(t) clock=t end
@@ -130,3 +132,11 @@ clock=1535;sent={};a.db.items[118].lines={'takes {item} in hand.'}
 a:ConfirmedUse(118,nil,111,4)
 ok(#sent==0 and a.last.result=='confirmed_missing_genuine_item_link_no_send','missing required item link not blocked')
 io.write('PASS v0.9.16 plain RP and missing-link gating\n')
+
+-- Logout flush is bound once on the lifetime event frame; no UI is required.
+ok(a.eventFrame.events.PLAYER_LOGOUT,'logout event missing')
+local saves=0;local save=a.SaveEditor
+a.SaveEditor=function() saves=saves+1;return true end
+a.eventFrame.OnEvent(a.eventFrame,'PLAYER_LOGOUT')
+ok(saves==1,'logout did not flush editor')
+a.SaveEditor=save

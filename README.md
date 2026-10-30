@@ -3,7 +3,7 @@
 **Forever RP** is an unofficial World of Warcraft roleplay addon for item-use emotes.
 It can announce confirmed consumption of food, drinks, potions and healthstones,
 and handles the Hearthstone separately. It offers random `/me` and `/say` lines,
-Last Item RP, category-specific English sample templates and per-character settings.
+Last Item RP, automatic category/race defaults and per-character custom texts.
 
 ## Status
 
@@ -19,6 +19,13 @@ The concrete per-client test checklist is tracked in [issue #4](https://github.c
 Real `/say` delivery and item behavior on WoW Forever have not yet been tested.
 Automatic chat may be limited by Blizzard's client restrictions. Do not assume
 messages were delivered to another player unless you have tested this.
+
+## Automatic library feature
+
+The planned 0.9.18 feature uses shared read-only defaults, per-category disable
+checkboxes and automatic character-race selection. The source version stays 0.9.17
+until an explicit release change. See [library behavior and migration](docs/automatic-library.md),
+including preserved legacy strings, explicit custom ownership and empty-pool opt-outs.
 
 ## Installing
 
@@ -41,7 +48,7 @@ python3 tools/package.py --version 0.9.17
 ```
 
 Two self-contained installable archives appear in `dist/`. Pull requests and
-pushes run Lua syntax checks, simulated UI/event tests and a package build.
+pushes run Lua syntax checks, simulated UI/event/scanner/library tests and a package build.
 Publish a GitHub Release tagged `v1.0.0` to attach both flavor ZIPs.
 
 ## Roadmap before v1.0
