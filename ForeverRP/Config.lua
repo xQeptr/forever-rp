@@ -707,6 +707,7 @@ function A:BuildConfig()
   end,function(value)
     if not A.selectedID then return end
     A.db.items[A.selectedID].outputMode=value
+    A:SeedLastItemPhrases(A.selectedID,A.db.items[A.selectedID])
     A:RefreshDetails()
   end,function()
     local cfg=A.selectedID and A.db.items[A.selectedID]

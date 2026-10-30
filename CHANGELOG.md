@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Seed missing Last Item pools immediately when changing output mode.
 - Invalidate pending casts when delayed bag scans reveal shared-spell ambiguity.
 - Guard optional item-class metadata during Hearthstone and known-item scans.
 - Reject empty/whitespace saved phrases before channel selection without changing original pools or spending cooldown.
