@@ -127,6 +127,18 @@ function A:MatchPending()
     if not within(now,p.at) then
       table.remove(self.pending,n)
     else
+      -- A delayed bag update can reveal a shared-spell item that was not in
+      -- the snapshot at cast time. Never keep the earlier singleton guess.
+      for id in pairs(self.spellToItems[p.spell] or {}) do p.candidates[id]=true end
+      for id,removal in pairs(self.removals) do
+        if removal.spell==p.spell and within(now,removal.at) then p.candidates[id]=true end
+      end
+      local candidateCount=0
+      for _ in pairs(p.candidates) do candidateCount=candidateCount+1 end
+      if candidateCount>1 then
+        self.last.result='ambiguous_items_same_spell_no_send'
+        table.remove(self.pending,n)
+      else
       local matchID,matchCount=nil,0
       for id in pairs(p.candidates) do
         local removal=self.removals[id]
@@ -149,6 +161,7 @@ function A:MatchPending()
         local remaining=self.inventory[matchID] and self.inventory[matchID].count or 0
         self:ConfirmedUse(matchID,removed.link,p.spell,remaining)
         return
+      end
       end
     end
   end

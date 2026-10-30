@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Invalidate pending casts when delayed bag scans reveal shared-spell ambiguity.
 - Guard optional item-class metadata during Hearthstone and known-item scans.
 - Reject empty/whitespace saved phrases before channel selection without changing original pools or spending cooldown.
 - Fix scanner metadata gaps, reject shared-spell ambiguity and invalidate removals on stock gains (issue #2).

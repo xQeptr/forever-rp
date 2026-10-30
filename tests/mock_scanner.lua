@@ -39,6 +39,14 @@ for _,first in ipairs({'bag','spell'})do
  assert(#sends==0,'stale sale attributed to shared spell')
 end
 reset();bags[0]={item(118,1)};a:OnBagsChanged();assert(a.removals[118])
+-- A newly acquired shared-spell item is discovered only after its success.
+-- Its pending cast must not later consume an unrelated sale of item 118.
+reset();a:OnSpellSucceeded('late-shared'..clock,111)
+bags[0]={item(118,2),item(119,1)};a:OnBagsChanged()
+assert(#a.pending==0,'late shared-spell discovery retained guessed candidate')
+bags[0]={item(118,1),item(119,1)};a:OnBagsChanged()
+assert(#sends==0,'pending cast attributed unrelated sale to old candidate')
+reset();bags[0]={item(118,1)};a:OnBagsChanged();assert(a.removals[118])
 bags[0]={item(118,2)};a:OnBagsChanged();assert(not a.removals[118],'gain retained removal')
 reset();bags[0]={};a:OnBagsChanged();assert(a.removals[118])
 bags[0]={item(118,1)};a:OnBagsChanged();assert(not a.removals[118],'reacquisition retained removal')
