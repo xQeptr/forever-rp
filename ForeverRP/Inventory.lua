@@ -42,8 +42,10 @@ function A:ScanBags()
             if not meta then
               meta={id=id,reusable=(id==6948),name=info.itemName or ('Item ' .. id),link=info.hyperlink,
                     icon=info.iconFileID, count=0,spell=spell,spellName=spellName}
-              local _,_,_,_,_,_,subclassID=C_Item.GetItemInfoInstant(id)
-              meta.subclassID=subclassID
+              if C_Item and C_Item.GetItemInfoInstant then
+                local _,_,_,_,_,_,subclassID=C_Item.GetItemInfoInstant(id)
+                meta.subclassID=subclassID
+              end
               local category,method=self:DetectCategory(meta,bag,slot)
               -- Retain earlier positive tooltip classification when a scan
               -- during combat cannot safely read tooltip data.
@@ -125,6 +127,18 @@ function A:MatchPending()
     if not within(now,p.at) then
       table.remove(self.pending,n)
     else
+      -- A delayed bag update can reveal a shared-spell item that was not in
+      -- the snapshot at cast time. Never keep the earlier singleton guess.
+      for id in pairs(self.spellToItems[p.spell] or {}) do p.candidates[id]=true end
+      for id,removal in pairs(self.removals) do
+        if removal.spell==p.spell and within(now,removal.at) then p.candidates[id]=true end
+      end
+      local candidateCount=0
+      for _ in pairs(p.candidates) do candidateCount=candidateCount+1 end
+      if candidateCount>1 then
+        self.last.result='ambiguous_items_same_spell_no_send'
+        table.remove(self.pending,n)
+      else
       local matchID,matchCount=nil,0
       for id in pairs(p.candidates) do
         local removal=self.removals[id]
@@ -147,6 +161,7 @@ function A:MatchPending()
         local remaining=self.inventory[matchID] and self.inventory[matchID].count or 0
         self:ConfirmedUse(matchID,removed.link,p.spell,remaining)
         return
+      end
       end
     end
   end

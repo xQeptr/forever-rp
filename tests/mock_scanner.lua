@@ -39,12 +39,35 @@ for _,first in ipairs({'bag','spell'})do
  assert(#sends==0,'stale sale attributed to shared spell')
 end
 reset();bags[0]={item(118,1)};a:OnBagsChanged();assert(a.removals[118])
+-- A newly acquired shared-spell item is discovered only after its success.
+-- Its pending cast must not later consume an unrelated sale of item 118.
+reset();a:OnSpellSucceeded('late-shared'..clock,111)
+bags[0]={item(118,2),item(119,1)};a:OnBagsChanged()
+assert(#a.pending==0,'late shared-spell discovery retained guessed candidate')
+bags[0]={item(118,1),item(119,1)};a:OnBagsChanged()
+assert(#sends==0,'pending cast attributed unrelated sale to old candidate')
+reset();bags[0]={item(118,1)};a:OnBagsChanged();assert(a.removals[118])
 bags[0]={item(118,2)};a:OnBagsChanged();assert(not a.removals[118],'gain retained removal')
 reset();bags[0]={};a:OnBagsChanged();assert(a.removals[118])
 bags[0]={item(118,1)};a:OnBagsChanged();assert(not a.removals[118],'reacquisition retained removal')
 -- All carried stacks, including bag 5; no bank slots queried.
 reset();bags={[0]={item(118,2)},[5]={item(118,3)},[-1]={item(118,99)}}
 a:ResetInventory();assert(a.inventory[118].count==5)
+-- Missing optional class metadata must not crash Hearthstone discovery or
+-- erase an already known consumable's carried count/use-spell mapping.
+local savedItemAPI=C_Item
+for _,api in ipairs({{}, {GetItemSpell=savedItemAPI.GetItemSpell}}) do
+ reset();bags={[0]={item(118,2),item(6948,1)}};C_Item=api
+ a:OnBagsChanged()
+ assert(a.inventory[118].count==2 and a.inventory[118].spell==111)
+ assert(a.inventory[6948].count==1 and a.inventory[6948].reusable)
+ assert(a.inventory[6948].autoCategory=='hearthstone' and #sends==0)
+ C_Item=savedItemAPI
+end
+reset();bags={[0]={item(6948,1)}};C_Item=nil
+a:ResetInventory();assert(a.inventory[6948].count==1 and #sends==0)
+C_Item=savedItemAPI
+reset();bags={[0]={item(118,2)},[5]={item(118,3)}};a:ResetInventory()
 -- Charges are deliberately not inferred from an unchanged stack count.
 a:OnSpellSucceeded('charge',111);a:OnBagsChanged();assert(#sends==0)
 -- Invalid persisted values remain recoverable and migration is idempotent.

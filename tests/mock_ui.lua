@@ -151,4 +151,20 @@ StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnCancel()
 assert(A.configFrame:IsShown(),'keep editing should reopen config')
 StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnAccept()
 assert(A.editorDirty==false and A.textEditor:GetText()==old,'discard should restore saved phrase')
-print('PASS v0.9.17 mock WoW UI: optional placeholder, exact newlines, validation, restore, autosave, icon layer, cursor scrolling')
+-- Mode changes seed only missing Last Item pools, without replacing drafts,
+-- custom pools, explicit empty pools or the Last Item opt-out.
+local cfg=A.db.items[118]
+local function chooseMode(mode)
+ A.modeDropdown._menu(nil,{CreateRadio=function(_,_,_,choose,key)
+  if key==mode then choose(key) end
+ end})
+end
+cfg.outputMode='me';cfg.outOfStockEnabled=true
+local custom={'custom last me'};cfg.outMeLines=custom;cfg.outSayLines=nil
+chooseMode('say')
+assert(cfg.outputMode=='say' and #cfg.outSayLines>0 and cfg.outMeLines==custom,'mode switch omitted Last Item say default')
+local empty={};cfg.outSayLines=empty;chooseMode('mixed')
+assert(cfg.outSayLines==empty and cfg.outMeLines==custom,'mode switch overwrote existing pools')
+cfg.outOfStockEnabled=false;cfg.outSayLines=nil;chooseMode('say')
+assert(cfg.outSayLines==nil and cfg.outOfStockEnabled==false,'mode switch ignored Last Item opt-out')
+print('PASS v0.9.17 mock WoW UI: optional placeholder, exact newlines, validation, restore, autosave, icon layer, cursor scrolling, mode defaults')
