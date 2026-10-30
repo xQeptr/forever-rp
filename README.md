@@ -8,6 +8,13 @@ Last Item RP, category-specific English sample templates and per-character setti
 ## Status
 
 Current development build: **0.9.17**, Retail **beta**, WoW Forever **preview**.
+Healthstone charge-only uses (unchanged stack count) are not confirmed: no
+charge-count API semantics have been verified on either target client. Do not
+assume every Healthstone use is announced or that Last Item means last charge.
+Before enabling charge support, record client/build, carried stack counts,
+remaining uses (including bank/includeUses API behavior), and spell/bag event
+ordering for 3->2->1->0 uses on both clients. No charge API is inferred here.
+
 Real `/say` delivery and item behavior on WoW Forever have not yet been tested.
 Automatic chat may be limited by Blizzard's client restrictions. Do not assume
 messages were delivered to another player unless you have tested this.

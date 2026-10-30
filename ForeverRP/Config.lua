@@ -213,8 +213,12 @@ end
 -- legacy already-enabled items. Explicit false is preserved as the opt-out.
 function A:SeedLastItemPhrases(id, cfg)
   if id==6948 or not cfg or not cfg.outOfStockEnabled then return end
-  if #self:GetPhrases(cfg,'en','me',true)==0 and #self:GetPhrases(cfg,'en','say',true)==0 then
-    self:SetPhrases(cfg,'en','me',self:GetStockSamplePack(self:GetCategory(id),'me'),true)
+  local mode=self.OutputModes[cfg.outputMode] and cfg.outputMode or 'me'
+  for _,channel in ipairs({'me','say'}) do
+    local field=channel=='me' and 'outMeLines' or 'outSayLines'
+    if (mode=='mixed' or mode==channel) and cfg[field]==nil then
+      self:SetPhrases(cfg,'en',channel,self:GetStockSamplePack(self:GetCategory(id),channel),true)
+    end
   end
 end
 function A:ToggleItemEnabled(id)
@@ -403,13 +407,18 @@ function A:ApplyInlineTemplates(which)
   local added = 0
   for i, phrase in ipairs(pack) do
     if (which == 'all' or self.templateSelection[i]) and not seen[phrase] then
-      if #lines >= self.MAX_LINES_PER_ITEM then break end
       lines[#lines+1] = phrase
       seen[phrase] = true
       added = added + 1
     end
   end
-  self:SetPhrases(cfg, 'en', channel, lines, stock)
+  local meta=self.inventory and self.inventory[self.selectedID]
+  local validated,err=self:ParseLines(table.concat(lines,'\n'),meta and meta.link)
+  if not validated then
+    self.editorStatus:SetText('|cffff7777Cannot import: '..err..'|r')
+    return false
+  end
+  self:SetPhrases(cfg, 'en', channel, validated, stock)
   self.shuffles = {}
   self.templateSelection = {}
   self.activeTab = stock and 'last' or 'regular'

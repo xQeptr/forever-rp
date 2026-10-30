@@ -58,7 +58,16 @@ function A:GetPhrases(cfg,language,kind,isStock)
   local key=(language=='de' and 'de' or 'en') .. '_' .. (kind=='say' and 'say' or 'me')
   local field=isStock and ({en_me='outMeLines',en_say='outSayLines',de_me='outDeMeLines',de_say='outDeSayLines'})[key]
     or ({en_me='lines',en_say='sayLines',de_me='deMeLines',de_say='deSayLines'})[key]
-  return type(cfg[field])=='table' and cfg[field] or {}
+  local pool=cfg[field]
+  if type(pool)~='table' then return {} end
+  -- Invalid persisted phrases stay stored, but never reach string operations.
+  local valid={}
+  for _,line in ipairs(pool) do
+    if type(line)=='string' and self:ParseLines(line) and not line:find('[\r\n]') then
+      valid[#valid+1]=line
+    end
+  end
+  return valid
 end
 function A:SetPhrases(cfg,language,kind,lines,isStock)
   local key=(language=='de' and 'de' or 'en') .. '_' .. (kind=='say' and 'say' or 'me')

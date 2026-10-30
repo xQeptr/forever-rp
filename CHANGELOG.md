@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Fix scanner metadata gaps, reject shared-spell ambiguity and invalidate removals on stock gains (issue #2).
+- Guard restricted cast values, quarantine malformed settings and ignore invalid phrases without deleting originals.
+- Seed missing Last Item pools for the output mode and validate template imports.
+- Gate release uploads on syntax and simulations; add real scanner regressions.
+- Document unverified Healthstone charges and required client tests.
+
 ## v0.9.17
 - Scroll the multiline text editor to the caret after typing or pressing Enter at the end of the list.
 - Reset the text editor scroll position when selecting another item or text pool.
