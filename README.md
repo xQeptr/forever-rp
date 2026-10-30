@@ -22,8 +22,8 @@ messages were delivered to another player unless you have tested this.
 
 ## Automatic library feature
 
-The planned 0.9.18 feature uses shared read-only defaults, per-category disable
-checkboxes and automatic character-race selection. The source version stays 0.9.17
+The planned 0.9.18 feature uses shared read-only defaults, per-category ON/OFF
+controls and automatic character-race selection. The source version stays 0.9.17
 until an explicit release change. See [library behavior and migration](docs/automatic-library.md),
 including preserved legacy strings, explicit custom ownership and empty-pool opt-outs.
 

@@ -20,7 +20,9 @@ The Blizzard API definition is mirrored in
 
 Authored English pools cover Forsaken (`Scourge`), Dwarf, Gnome, Orc, Troll, Tauren,
 Human and Night Elf. Gnome uses teal; each complete racial phrase carries its subtle
-race color; general phrases are white. Each authored race/category/pool has two new entries. Hearthstone has
+race color; general phrases are white. The original race pack has two entries per race/category/pool. Additive editorial
+entries extend selected pools, with extra attention to elixirs; see the
+[writing guide](rp-writing-guide.md) and [full count matrix](rp-variety-report.md). Hearthstone has
 no Last Item defaults. Old explicitly undead/Lordaeron flavor is restricted to
 Scourge, including dormant German templates. Healthstones describe breaking fel
 stones; no charge support or change to consumption confirmation is introduced.
@@ -29,15 +31,18 @@ stones; no charge support or change to consumption confirmation is introduced.
 
 Both RP tabs and /me-/say subtabs remain. The main text area contains only
 read-only default phrases in one scrollable list, without section headers or
-collapsible groups. Every default starts checked (active); unchecking disables it
+collapsible groups. Every default starts ON (active); switching its compact status button OFF disables it
 across every item in that category/pool via `ForeverRPDB.defaultDisabled[stableID]`.
-Existing opt-outs remain unchecked. General phrases are white and racial phrases
+Existing opt-outs remain OFF. General phrases are white and racial phrases
 use their race color. Phrases wrap rather than being truncated; hover also shows
 an item-expanded preview. Counts reflect the effective current pool.
 
 **Edit custom phrases** opens a separate movable window with its own Regular/Last
 Item and /me-/say tabs, context title, multiline custom editor, local preview and
-**Edit preserved matches as own texts** recovery. It never sends chat. Valid edits
+**Edit preserved matches as own texts** recovery. The native EditBox fills the writing viewport; left-clicking below the last line
+places the caret at the end. Text placement/drag selection remain native, without
+a mouse-forwarding overlay. Buttons and scrollbar are outside that hit rectangle.
+It never sends chat. Valid edits
 save after 0.7 seconds, on blur, close, context switch and PLAYER_LOGOUT. Invalid
 input blocks item/tab/channel switches; closing offers explicit discard or keep
 editing. Clients without confirmation support keep the editor open. The main
@@ -114,3 +119,7 @@ behavior and external /me-/say delivery have **not** been tested. Existing scann
 Healthstone charge limitations, three-second correlation, shared cooldown,
 Hearthstone cast-start/120-second throttle and chat-lockdown rules remain in force.
 The PR records the actual local, independent-review and Actions results.
+
+New editorial entries set `migrationMatch=false`: adding a newly authored default
+must not retroactively classify an identical existing custom phrase as a legacy
+import. Frozen historical aliases still participate in conservative migration.

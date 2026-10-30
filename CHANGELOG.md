@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Fill the custom writing viewport with the native EditBox; focus blank clicks at text end while preserving native selection and scrolling.
+- Use compact ON/OFF controls for default phrases, preserving category opt-outs and restoring source colors on reused rows.
+- Add 188 original category/race phrases, with extra elixir variety; freeze all 1,968 historical entries and keep coincidentally identical existing custom text independent.
+- Document lore sources, editorial limitations and reproducible variety metrics; add focused byte-budget, grammar, identity and migration regressions.
 - Move custom phrases into an independent editor; show wrapping defaults without headers, with active checkboxes and whole-phrase race colors.
 - Preserve invalid editor drafts across reload; flush valid edits on logout and keep per-pool contexts explicit.
 - Fix library-hover tooltip crashes caused by passing the substitution count as a native color argument; reset reused opt-out row colors.

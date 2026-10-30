@@ -2,13 +2,42 @@ local mt={}
 mt.__index=function(o,k)
  if k=='entry' then return nil end
  if k=='TitleText' then return o._title end
- if k=='GetText' then return function(self) return self._text or '' end end
- if k=='GetHeight' then return function(self) return self._height or 0 end end
- if k=='GetVerticalScroll' then return function(self) return self._scroll or 0 end end
+ if k=='GetText' then return function(self) return rawget(self,'_text') or '' end end
+ if k=='GetHeight' then return function(self) return rawget(self,'_height') or 0 end end
+ if k=='GetWidth' then return function(self) return rawget(self,'_width') or 622 end end
+ if k=='SetHeight' then return function(self,h) self._height=h end end
+ if k=='SetWidth' then return function(self,w) self._width=w end end
+ if k=='GetFontString' then return function(self) return self._fontString end end
+ if k=='SetFontString' then return function(self,f) self._fontString=f end end
+ if k=='GetScript' then return function(self,event) return rawget(self,'_script_'..event) end end
+ if k=='HookScript' then return function(self,event,fn)
+  local previous=self:GetScript(event)
+  self:SetScript(event,function(...) if previous then previous(...) end;fn(...) end)
+ end end
+ if k=='SetPoint' then return function(self,...) self._point={...} end end
+ if k=='EnableMouse' then return function(self,x) self._mouse=x end end
+ if k=='GetTop' then return function(self) return rawget(self,'_top') or 500 end end
+ if k=='GetEffectiveScale' then return function(self) return rawget(self,'_scale') or 1 end end
+ if k=='HasFocus' then return function(self) return rawget(self,'_focus') or false end end
+ if k=='SetFocus' then return function(self) self._focus=true end end
+ if k=='ClearFocus' then return function(self) self._focus=false end end
+ if k=='SetCursorPosition' then return function(self,x) self._cursor=x end end
+ if k=='GetVerticalScroll' then return function(self) return rawget(self,'_scroll') or 0 end end
  if k=='SetVerticalScroll' then return function(self,x) self._scroll=x end end
  if k=='GetChecked' then return function(self) return self._checked end end
  if k=='GetStringWidth' or k=='GetUnboundedStringWidth' then return function(self) return #(self._text or '')*6 end end
- if k=='GetStringHeight' then return function(self) return 30 end end
+ if k=='GetStringHeight' then return function(self)
+  assert(rawget(self,'_kind')~='EditBox','text measurement must use the FontString API')
+  -- Deliberately approximate font metrics: model explicit lines and wrapping,
+  -- so resizing/content-height tests cannot pass with a constant stub.
+  local width=rawget(self,'_width') or 622
+  local columns=math.max(1,math.floor(width/6))
+  local lines=0
+  for line in (tostring(rawget(self,'_text') or '')..'\n'):gmatch('(.-)\n') do
+   lines=lines+math.max(1,math.ceil(#line/columns))
+  end
+  return lines*16
+ end end
  if k=='IsShown' then return function(self) return self._shown or false end end
  if k=='CreateFontString' or k=='CreateTexture' then return function(self) return setmetatable({ _text='' },mt) end end
  if k=='SetText' then return function(self,x,...)
@@ -93,6 +122,68 @@ hoverRow.entry=originalEntry
 assert(not pcall(function() GameTooltip:SetText('text',1) end),'numeric color accepted')
 assert(select('#',A:PreviewTemplateLine('{item}'))==1,'preview leaked replacement count')
 assert(A.textEditor:GetText()=='takes a sip of {item}.','loaded correct regular phrase')
+-- Geometric hit-test regression: only the actual native EditBox receives a
+-- writing-area click. No fake overlay forwarding clicks through to it.
+local edit,scroll=A.textEditor,A.editorScroll
+scroll._width=622;scroll._height=261;scroll._script_OnSizeChanged(scroll,622,261)
+assert(edit._point[1]=='TOPLEFT' and edit._point[2]==scroll,'scroll child not anchored to viewport')
+assert(edit._mouse and edit:GetWidth()==622 and edit:GetHeight()>=261,'writing hit rectangle does not cover viewport')
+local mouseX,mouseY
+GetCursorPosition=function() return mouseX,mouseY end
+local function clickWriting(x,y,button)
+ assert(x>=0 and x<scroll:GetWidth() and y>=0 and y<scroll:GetHeight(),'outside writing viewport')
+ local offset=scroll:GetVerticalScroll()
+ edit._top=scroll:GetTop()+offset
+ assert(x<edit:GetWidth() and y+offset<edit:GetHeight(),'click misses native EditBox')
+ mouseX,mouseY=x*edit:GetEffectiveScale(),(scroll:GetTop()-y)*edit:GetEffectiveScale()
+ -- Stand-in native placement occurs before addon HookScript. The addon must
+ -- leave this intact on text lines, including native drag-selection state.
+ edit._cursor=3;edit._selection={1,3};edit:ClearFocus()
+ edit._script_OnMouseDown(edit,button or 'LeftButton')
+end
+for _,x in ipairs({1,310,621}) do
+ clickWriting(x,10)
+ assert(edit:HasFocus() and edit._cursor==3 and edit._selection[2]==3,'text-line click damaged native caret/selection')
+end
+clickWriting(310,220)
+assert(edit:HasFocus() and edit._cursor==#edit:GetText(),'blank-area click must focus at text end')
+clickWriting(310,220,'RightButton')
+assert(not edit:HasFocus() and edit._cursor==3,'right mouse click changed cursor')
+assert(not scroll:GetScript('OnMouseDown'),'scroll overlay intercepts native editing')
+-- Scrollbar and footer controls are siblings/outside the writing viewport.
+assert(edit._parent==scroll and A.customEditor~=edit._parent,'editor escaped its clipping viewport')
+-- Width, line count, viewport height, UI scale and scroll offset are independent.
+local originalText=edit:GetText()
+local function measureDraft(text,width,height)
+ A.loadingEditor=true
+ edit:SetText(text);edit._script_OnTextChanged(edit)
+ scroll._width=width;scroll._height=height;scroll._script_OnSizeChanged(scroll,width,height)
+ A.loadingEditor=false
+end
+measureDraft(string.rep('a',1200),120,120)
+local narrowHeight=edit:GetHeight()
+assert(narrowHeight>900 and edit:GetWidth()==120,'wrapped content did not grow beyond viewport')
+measureDraft(string.rep('a',1200),622,120)
+assert(edit:GetHeight()>120 and edit:GetHeight()<narrowHeight,'wider viewport did not reflow content')
+measureDraft(string.rep('line\n',20),622,261)
+assert(edit:GetHeight()==21*16+30,'trailing newline did not retain final editable line')
+scroll:SetVerticalScroll(180);edit._scale=.75
+clickWriting(310,120)
+assert(edit:HasFocus() and edit._cursor==3,'scaled scrolled text-line click moved cursor to end')
+clickWriting(621,165)
+assert(edit:HasFocus() and edit._cursor==#edit:GetText(),'scaled scrolled blank click missed text end')
+edit._scale=1.5
+clickWriting(1,120)
+assert(edit:HasFocus() and edit._cursor==3,'large UI scale broke native placement')
+clickWriting(310,165)
+assert(edit._cursor==#edit:GetText(),'large UI scale broke blank-area placement')
+scroll:SetVerticalScroll(0);edit._scale=1;edit._top=nil
+measureDraft('',622,400)
+assert(edit:GetHeight()==400,'empty editor did not cover enlarged viewport')
+measureDraft(originalText,622,261)
+assert(edit:GetHeight()==261,'short text did not shrink back to viewport')
+assert(not A.editorDirty,'geometry-only checks dirtied saved phrases')
+GetCursorPosition=nil
 A.textEditor:SetText('consumes a {item} politely.')
 A.editorDirty=true
 A:SelectItem(1179)
@@ -106,10 +197,10 @@ A.editorDirty=true
 A:SwitchTab('last')
 assert(A.db.items[118].sayLines[1]=='More {item}, please.','save on tab switch')
 assert(A.libraryRows and #A.libraryRows>2,'default library rows missing')
-local checkbox
-for _,r in ipairs(A.libraryRows) do if r.entry then checkbox=r.checkbox;break end end
-assert(checkbox,'missing default disable checkbox')
-checkbox:SetChecked(false);checkbox._script_OnClick(checkbox)
+local status
+for _,r in ipairs(A.libraryRows) do if r.entry then status=r.status;break end end
+assert(status,'missing default ON/OFF')
+status._script_OnClick(status)
 assert(next(A.db.defaultDisabled),'default disable not saved')
 assert(A.db.items[118].outSayLines==nil,'default materialized into item')
 A:SwitchChannel('me')
@@ -215,7 +306,7 @@ local cfg=A.db.items[118];cfg.autoCategory='potion';A:RefreshDetails()
 local row
 for _,r in ipairs(A.libraryRows)do if type(r.entry)=='table'then row=r;break end end
 assert(row and row.entry.category=='potion' and not row.entry.stock and row.entry.channel=='me')
-local disabled=row.entry.id;row.checkbox:SetChecked(false);row.checkbox._script_OnClick(row.checkbox)
+local disabled=row.entry.id;row.status._script_OnClick(row.status)
 A.db.items[1179].autoCategory='potion';A:SelectItem(1179)
 assert(A:IsDefaultDisabled(disabled),'disable did not survive item switch')
 A:SwitchTab('last');A:SwitchChannel('say')
@@ -233,7 +324,7 @@ for _,tab in ipairs({'regular','last'}) do
   for _,r in ipairs(A.libraryRows) do
    if r:IsShown() and type(r.entry)=='table' then
     r._script_OnEnter(r);r._script_OnLeave(r)
-    local expected=(r.entry.source~='universal') and .22 or 1
+    local expected=A:IsDefaultDisabled(r.entry.id) and .49 or ((r.entry.source~='universal') and .22 or 1)
     assert(r.display._color[1]==expected,'phrase color does not match source')
    end
   end
@@ -264,14 +355,15 @@ A.db.defaultDisabled={};A:RefreshDefaultLibrary()
 for _,r in ipairs(A.libraryRows) do
  if r:IsShown() then
   assert(type(r.entry)=='table','unexpected heading row')
-  assert(r.checkbox:GetChecked()==true,'new default not checked')
+  assert(r.status:GetText()=='ON','new default not ON')
  end
 end
 local r=A.libraryRows[1];local id=r.entry.id
-r.checkbox:SetChecked(false);r.checkbox._script_OnClick(r.checkbox)
-assert(A:IsDefaultDisabled(id) and not r.checkbox:GetChecked(),'unchecked must disable')
-r.checkbox:SetChecked(true);r.checkbox._script_OnClick(r.checkbox)
-assert(not A:IsDefaultDisabled(id) and r.checkbox:GetChecked(),'checked must enable')
+r.status._script_OnClick(r.status)
+assert(A:IsDefaultDisabled(id) and r.status:GetText()=='OFF','OFF must disable')
+assert(r.display._color[1]==.49,'OFF text must be subdued')
+r.status._script_OnClick(r.status)
+assert(not A:IsDefaultDisabled(id) and r.status:GetText()=='ON','ON must enable')
 -- Race color lives on the complete phrase, and resets on reused rows.
 for _,race in ipairs({'Scourge','Orc','Dwarf','Gnome'}) do
  UnitRace=function() return race,race end
@@ -297,7 +389,7 @@ assert(not A:SaveEditor(),'invalid recovered draft saved')
 StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnAccept()
 pending()
 assert(not A.editorDirty and A.db.editorDraft==nil,'stale timer restored discarded draft')
-print('PASS separate editor, active checkboxes, header-free colored defaults, persisted invalid draft')
+print('PASS separate editor, native writing hitbox, ON/OFF defaults, header-free colors, persisted invalid draft')
 
 -- Pending callbacks cannot save into another item or pool after switching.
 A:SelectItem(118);A:SwitchTab('regular');A:SwitchChannel('me')

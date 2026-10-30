@@ -419,15 +419,26 @@ function A:RefreshDefaultLibrary()
     if not row then
       row=CreateFrame('Button',nil,A.libraryContent)
       row:SetSize(616,30)
-      row.display=label(row,'',30,-7)
-      row.display:SetWidth(580);row.display:SetJustifyH('LEFT')
-      row.checkbox=CreateFrame('CheckButton',nil,row,'UICheckButtonTemplate')
-      row.checkbox:SetSize(25,25);row.checkbox:SetPoint('LEFT',row,'LEFT',0,0)
-      row.checkbox:SetScript('OnClick',function(cb)
+      row.display=label(row,'',42,-7)
+      row.display:SetWidth(568);row.display:SetJustifyH('LEFT')
+      row.status=button(row,'',34,24,0,-3,function()
         if row.entry then
-          A:SetDefaultDisabled(row.entry.id,not cb:GetChecked())
+          A:SetDefaultDisabled(row.entry.id,not A:IsDefaultDisabled(row.entry.id))
           A:RefreshDefaultLibrary(); A:RefreshTextInfo()
         end
+      end)
+      row.statusText=row.status:GetFontString()
+      row.status:SetScript('OnEnter',function(self)
+        self.inner:SetColorTexture(.25,.33,.39,1)
+        if row.entry and GameTooltip then
+          GameTooltip:SetOwner(self,'ANCHOR_RIGHT')
+          GameTooltip:SetText('ON = active; OFF = disabled for every item in this category and phrase pool.')
+          GameTooltip:Show()
+        end
+      end)
+      row.status:SetScript('OnLeave',function(self)
+        self.inner:SetColorTexture(.19,.24,.29,.98)
+        if GameTooltip then GameTooltip:Hide() end
       end)
       row:SetScript('OnEnter',function()
         if row.entry and GameTooltip then
@@ -446,22 +457,24 @@ function A:RefreshDefaultLibrary()
   for index,entries in ipairs({u,r}) do
     for _,entry in ipairs(entries) do
       local item=nextRow();item.entry=entry
-      item.checkbox:Show();item.checkbox:SetChecked(not self:IsDefaultDisabled(entry.id))
+      local enabled=not self:IsDefaultDisabled(entry.id)
+      item.status:Show();item.status:SetText(enabled and 'ON' or 'OFF')
+      item.statusText:SetTextColor(enabled and .55 or .70,enabled and .85 or .57,enabled and .63 or .48)
       local color=index==2 and info and info.color or {1,1,1}
+      if not enabled then color={.49,.52,.54} end
       item.display:SetTextColor(color[1],color[2],color[3])
       item.display:SetText(entry.text)
       if item.display.SetWordWrap then item.display:SetWordWrap(true) end
       local height=math.max(30,(item.display:GetStringHeight() or 16)+14)
       item:SetHeight(height);y=y+height-30
-      item:SetScript('OnClick',function()
-        A:SetDefaultDisabled(entry.id,not A:IsDefaultDisabled(entry.id));A:RefreshDefaultLibrary();A:RefreshTextInfo()
-      end)
+      -- Only the explicit status segment toggles; reading/dragging text does not.
+      item:SetScript('OnClick',nil)
     end
   end
   local cfg=self.db.items[self.selectedID]
   local field=self:PhraseField('en',self.activeChannel or 'me',self.activeTab=='last')
   if type(cfg.libraryLegacyEmpty)=='table' and cfg.libraryLegacyEmpty[field] then
-    local row=nextRow();row.checkbox:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
+    local row=nextRow();row.status:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
     row.display:SetTextColor(.78,.81,.82)
     row:SetHeight(44);y=y+14
     row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary();A:RefreshTextInfo() end)
@@ -751,8 +764,40 @@ function A:BuildConfig()
   edit:SetMultiLine(true)
   edit:SetAutoFocus(false)
   edit:SetFontObject('ChatFontNormal')
-  edit:SetWidth(605)
-  edit:SetHeight(96)
+  -- An unanchored, text-height child leaves most of the viewport outside the
+  -- EditBox hit rectangle. Cover the writing area with the native EditBox,
+  -- never with an overlay that would intercept selection or the scrollbar.
+  edit:SetPoint('TOPLEFT',editorScroll,'TOPLEFT',0,0)
+  edit:EnableMouse(true)
+  edit:SetTextInsets(0,0,0,0)
+  -- GetStringHeight belongs to FontString, not the EditBox API. Measure with
+  -- identical font/width, including an empty trailing line after Enter.
+  local measure=custom:CreateFontString(nil,'OVERLAY','ChatFontNormal')
+  measure:SetWordWrap(true);measure:SetJustifyH('LEFT');measure:Hide()
+  local textHeight=0
+  local function sizeEditor()
+    local width=math.max(1,editorScroll:GetWidth() or 622)
+    edit:SetWidth(width);measure:SetWidth(width)
+    measure:SetText(edit:GetText()..' ')
+    textHeight=measure:GetStringHeight() or 0
+    edit:SetHeight(math.max(editorScroll:GetHeight() or 261,textHeight+30))
+  end
+  editorScroll:SetScript('OnSizeChanged',sizeEditor)
+  custom:HookScript('OnShow',sizeEditor)
+  sizeEditor()
+  -- Retain native mouse placement and drag selection within the text. Only
+  -- clicks below its last line need an explicit end-of-buffer placement.
+  edit:HookScript('OnMouseDown',function(e,mouseButton)
+    if mouseButton~='LeftButton' then return end
+    if not e:HasFocus() then e:SetFocus() end
+    if GetCursorPosition and e.GetTop and e.GetEffectiveScale then
+      local _,screenY=GetCursorPosition()
+      local top,scale=e:GetTop(),e:GetEffectiveScale()
+      if top and scale and scale>0 and top-screenY/scale>textHeight then
+        e:SetCursorPosition(#e:GetText())
+      end
+    end
+  end)
   edit:SetMaxBytes(36000)
   edit:SetScript('OnEscapePressed',function(e) e:ClearFocus() end)
   edit:SetScript('OnEditFocusLost',function()
@@ -789,7 +834,7 @@ function A:BuildConfig()
     if C_Timer and C_Timer.After then C_Timer.After(0,followCursor) end
   end)
   edit:SetScript('OnTextChanged',function(e)
-    if e.GetStringHeight then e:SetHeight(math.max(96,(e:GetStringHeight() or 0)+30)) end
+    sizeEditor()
     if A.loadingEditor then return end
     A.editorDirty=true
     A:RememberEditorDraft()
