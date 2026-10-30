@@ -42,8 +42,10 @@ function A:ScanBags()
             if not meta then
               meta={id=id,reusable=(id==6948),name=info.itemName or ('Item ' .. id),link=info.hyperlink,
                     icon=info.iconFileID, count=0,spell=spell,spellName=spellName}
-              local _,_,_,_,_,_,subclassID=C_Item.GetItemInfoInstant(id)
-              meta.subclassID=subclassID
+              if C_Item and C_Item.GetItemInfoInstant then
+                local _,_,_,_,_,_,subclassID=C_Item.GetItemInfoInstant(id)
+                meta.subclassID=subclassID
+              end
               local category,method=self:DetectCategory(meta,bag,slot)
               -- Retain earlier positive tooltip classification when a scan
               -- during combat cannot safely read tooltip data.
