@@ -17,6 +17,7 @@ jobs:
         run: |
           lua5.4 tests/mock_ui.lua
           lua5.4 tests/mock_events.lua
+          lua5.4 tests/mock_scanner.lua
       - name: Package Retail and Forever
         run: python3 tools/package.py --version 0.9.17
       - uses: actions/upload-artifact@v4

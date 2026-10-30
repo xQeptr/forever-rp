@@ -30,9 +30,14 @@ function A:ScanBags()
       local info=C_Container.GetContainerItemInfo(bag,slot)
       if info and type(info.itemID)=='number' then
         local id=info.itemID
-        if isConsumable(id) or id==6948 then
+        if type(info.stackCount)~='number' or info.stackCount<1 then return nil,nil end
+        if isConsumable(id) or id==6948 or self.inventory[id] then
           local spell,spellName=itemSpell(id)
-          if spell and type(info.hyperlink)=='string' and info.hyperlink:find('|Hitem:',1,true) then
+          local previous=self.inventory[id]
+          -- Metadata cache misses cannot erase a known use-spell candidate.
+          spell=spell or (previous and previous.spell)
+          spellName=spellName or (previous and previous.spellName)
+          do
             local meta=found[id]
             if not meta then
               meta={id=id,reusable=(id==6948),name=info.itemName or ('Item ' .. id),link=info.hyperlink,
@@ -51,8 +56,10 @@ function A:ScanBags()
               found[id]=meta
             end
             meta.count=meta.count+(info.stackCount or 1)
-            if not spells[spell] then spells[spell]={} end
-            spells[spell][id]=true
+            if spell then
+              if not spells[spell] then spells[spell]={} end
+              spells[spell][id]=true
+            end
             self:Remember(id,meta)
           end
         end
@@ -91,9 +98,12 @@ function A:OnBagsChanged()
   local old=self.inventory
   local now=self:Now()
   local changes={}
+  for id,meta in pairs(current) do
+    if meta.count>(old[id] and old[id].count or 0) then self.removals[id]=nil end
+  end
   for id,prev in pairs(old) do
     local newCount=current[id] and current[id].count or 0
-    if newCount<prev.count then
+    if newCount<prev.count and prev.spell then
       changes[id]=(prev.count-newCount)
       local remove=self.removals[id]
       if within(now,remove and remove.at) then
@@ -156,6 +166,7 @@ local function wallSeconds(self)
   return math.floor(self:Now())
 end
 function A:OnCastStart(guid,spell)
+  if not self:SafeCastValues(guid,spell) then return end
   if not isHearthSpell(self,spell) then return end
   if self.hearthCast and guid and self.hearthCast.guid==guid then return end
   local current=wallSeconds(self)
@@ -196,6 +207,7 @@ function A:OnCastStart(guid,spell)
   end
 end
 function A:OnCastInterrupted(guid,spell,event)
+  if not self:SafeCastValues(guid,spell) then return end
   local p=self.hearthCast
   if p and p.spell==spell and (not p.guid or not guid or p.guid==guid) then
     if p.state=='announcement_attempted' then
@@ -212,6 +224,7 @@ function A:CheckHearthstoneArrival(source)
   return
 end
 function A:OnSpellSucceeded(guid,spell)
+  if not self:SafeCastValues(guid,spell) then return end
   if type(spell)~='number' then return end
   local now=self:Now()
   if guid and guid==self.lastCastGUID then return end
@@ -225,6 +238,12 @@ function A:OnSpellSucceeded(guid,spell)
     if rem.spell==spell and within(now,rem.at) then candidates[id]=true end
   end
   if not next(candidates) then return end
+  local candidateCount=0
+  for _ in pairs(candidates) do candidateCount=candidateCount+1 end
+  if candidateCount>1 then
+    self.last.result='ambiguous_items_same_spell_no_send'
+    return
+  end
   -- Hearthstone output, if any, already happened at cast start.
   -- Never duplicate it after successful completion/loading screens.
   if isHearthSpell(self,spell) then

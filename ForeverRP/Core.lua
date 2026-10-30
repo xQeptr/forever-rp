@@ -16,6 +16,12 @@ function A:Debug(message)
   if self.db and self.db.debug then self:Say('[DEBUG] ' .. tostring(message)) end
 end
 function A:Now() return GetTime() end
+function A:SafeCastValues(guid,spell,unit)
+  if type(issecretvalue)=='function' then
+    if issecretvalue(unit) or issecretvalue(guid) or issecretvalue(spell) then return false end
+  end
+  return true
+end
 function A:GetSettings(itemID)
   if not self.db then return nil end
   return self.db.items[itemID]
@@ -23,7 +29,7 @@ end
 function A:Remember(id, meta)
   if not self.db then return end
   local item = self.db.items[id]
-  if not item then
+  if type(item)~='table' then
     item = {enabled=false, lines={}, name=meta.name or ('Item ' .. id)}
     self.db.items[id] = item
   end
@@ -50,6 +56,41 @@ function A:Init()
   self.db.language='en'
   if self.db.defaultScope==nil then self.db.defaultScope='group' end
   if not self.ValidScopes[self.db.defaultScope] then self.db.defaultScope='group' end
+  -- Quarantine malformed values instead of discarding player data.
+  self.db.invalidSavedValues=self.db.invalidSavedValues or {}
+  local backup=self.db.invalidSavedValues
+  if type(backup)~='table' then backup={}; self.db.invalidSavedValues=backup end
+  local function normalize(t,key,valid,default,label)
+    local value=t[key]
+    if value~=nil and not valid(value) then
+      backup[label or key]=value
+      t[key]=default
+    elseif value==nil and default~=nil then t[key]=default end
+  end
+  local function boolean(v) return type(v)=='boolean' end
+  local function number(v) return type(v)=='number' and v==v and v~=math.huge and v~=-math.huge end
+  for _,key in ipairs({'auto','debug','showMinimap'}) do
+    normalize(self.db,key,boolean,key~='debug')
+  end
+  for _,key in ipairs({'minimapAngle','hearthLastAnnounceAt','globalLastEmoteAt'}) do
+    normalize(self.db,key,number,key=='minimapAngle' and 220 or 0)
+  end
+  normalize(self.db,'globalCooldown',function(v) return v==0 or v==15 or v==30 or v==60 or v==120 end,30)
+  for id,cfg in pairs(self.db.items) do
+    if type(cfg)~='table' then
+      backup[id]=cfg
+      self.db.items[id]={enabled=false,lines={}}
+    else
+      for _,key in ipairs({'enabled','outOfStockEnabled'}) do
+        normalize(cfg,key,boolean,key=='enabled' and false or nil,tostring(id)..':'..key)
+      end
+      normalize(cfg,'name',function(v) return type(v)=='string' end,'Item '..tostring(id),tostring(id)..':name')
+      for _,key in ipairs({'outputMode','scopeOverride','categoryOverride','autoCategory'}) do
+        local valid=key=='outputMode' and self.OutputModes or key=='scopeOverride' and self.ValidScopes or self.categoryNames
+        normalize(cfg,key,function(v) return type(v)=='string' and valid[v]~=nil end,nil,tostring(id)..':'..key)
+      end
+    end
+  end
   self:ResetInventory()
   -- Last Item defaults ON for already enabled consumables, unless previously
   -- explicitly opted out. Hearthstone never needs a last-item notification.
@@ -162,13 +203,13 @@ A.eventFrame:SetScript('OnEvent',function(_,event,...)
     if A.db then A:OnBagsChanged() end
   elseif event=='UNIT_SPELLCAST_START' then
     local unit,castGUID,spellID=...
-    if unit=='player' and A.db then A:OnCastStart(castGUID,spellID) end
+    if A:SafeCastValues(castGUID,spellID,unit) and unit=='player' and A.db then A:OnCastStart(castGUID,spellID) end
   elseif event=='UNIT_SPELLCAST_FAILED' or event=='UNIT_SPELLCAST_INTERRUPTED' then
     local unit,castGUID,spellID=...
-    if unit=='player' and A.db then A:OnCastInterrupted(castGUID,spellID,event) end
+    if A:SafeCastValues(castGUID,spellID,unit) and unit=='player' and A.db then A:OnCastInterrupted(castGUID,spellID,event) end
   elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
     local unit, castGUID, spellID=...
-    if unit=='player' and A.db then A:OnSpellSucceeded(castGUID,spellID) end
+    if A:SafeCastValues(castGUID,spellID,unit) and unit=='player' and A.db then A:OnSpellSucceeded(castGUID,spellID) end
   elseif event=='CHAT_MSG_EMOTE' or event=='CHAT_MSG_SAY' then
     if A.db then A:OnChatEcho(event,...) end
   end
