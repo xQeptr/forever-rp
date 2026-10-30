@@ -63,7 +63,7 @@ function A:GetLibrarySources(id,lang,ch,stock)
   -- Match every historical category, so a category override cannot turn an
   -- imported sample into an ungoverned custom phrase. Saved text is untouched.
   for _,e in ipairs(self.DefaultEntries) do
-    if e.language==lang and e.channel==ch and e.stock==not not stock then known[e.text]=true; if e.legacyText then known[e.legacyText]=true end end
+    if e.migrationMatch~=false and e.language==lang and e.channel==ch and e.stock==not not stock then known[e.text]=true; if e.legacyText then known[e.legacyText]=true end end
   end
   local owned=type(cfg.libraryCustom)=='table' and cfg.libraryCustom[field]
   for _,text in ipairs(self:GetPhrases(cfg,lang,ch,stock)) do
@@ -128,7 +128,7 @@ function A:SetCustomPhrases(id,lang,ch,lines,stock)
   local field=self:PhraseField(lang,ch,stock)
   local known={}
   for _,entry in ipairs(self.DefaultEntries) do
-    if entry.language==lang and entry.channel==ch and entry.stock==not not stock then known[entry.text]=true; if entry.legacyText then known[entry.legacyText]=true end end
+    if entry.migrationMatch~=false and entry.language==lang and entry.channel==ch and entry.stock==not not stock then known[entry.text]=true; if entry.legacyText then known[entry.legacyText]=true end end
   end
   local merged,entered={},{}
   for _,line in ipairs(lines) do entered[line]=true end

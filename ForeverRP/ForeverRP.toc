@@ -16,6 +16,7 @@ AlcoholSamples.lua
 StockSamples.lua
 DefaultLibrary.lua
 RaceLibrary.lua
+EditorialLibrary.lua
 Library.lua
 Inventory.lua
 Scopes.lua

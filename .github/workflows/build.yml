@@ -22,6 +22,7 @@ jobs:
           lua${{ matrix.lua }} tests/mock_events.lua
           lua${{ matrix.lua }} tests/mock_scanner.lua
           lua${{ matrix.lua }} tests/mock_library.lua
+          lua${{ matrix.lua }} tests/mock_text_quality.lua
       - name: Package Retail and Forever
         run: python3 tools/package.py --version 0.9.17
       - uses: actions/upload-artifact@v4
