@@ -78,21 +78,26 @@ function A:SetPhrases(cfg,language,kind,lines,isStock)
 end
 A.OutputModes={me='Only /me',say='Only /say',mixed='Mixed /me + /say'}
 A.OutputOrder={'me','say','mixed'}
-function A:GetAvailableChannels(cfg,lang,isStock)
+function A:GetAvailableChannels(cfg,lang,isStock,id)
+  if not id and self.db then
+    for itemID,item in pairs(self.db.items) do if item==cfg then id=itemID; break end end
+  end
   local mode=self.OutputModes[cfg.outputMode] and cfg.outputMode or 'me'
   local result={}
   for _,channel in ipairs({'me','say'}) do
-    local lines=self:GetPhrases(cfg,lang,channel,isStock)
+    local lines=self.GetResolvedPhrases and id and self:GetResolvedPhrases(id,lang,channel,isStock) or self:GetPhrases(cfg,lang,channel,isStock)
     if #lines>0 and (mode=='mixed' or mode==channel) then result[#result+1]=channel end
   end
   return result
 end
-function A:Pick(id,lines,language,channel,isStock)
+function A:Pick(id,lines,language,channel,isStock,avoidText)
   local key=tostring(id)..':'..language..':'..channel..(isStock and ':stock' or ':normal')
+  local signature=table.concat(lines,"\n")
   local shuffle=self.shuffles[key]
-  if not shuffle or shuffle.length~=#lines or #shuffle.deck==0 then
+  if not shuffle or shuffle.signature~=signature or #shuffle.deck==0 then
     shuffle=shuffle or {previous=nil}
     shuffle.length=#lines
+    shuffle.signature=signature
     shuffle.deck={}
     for n=1,#lines do shuffle.deck[n]=n end
     for n=#shuffle.deck,2,-1 do
@@ -103,6 +108,14 @@ function A:Pick(id,lines,language,channel,isStock)
       shuffle.deck[#shuffle.deck],shuffle.deck[1]=shuffle.deck[1],shuffle.deck[#shuffle.deck]
     end
     self.shuffles[key]=shuffle
+  end
+  if avoidText and lines[shuffle.deck[#shuffle.deck]]==avoidText then
+    for i=1,#shuffle.deck-1 do
+      if lines[shuffle.deck[i]]~=avoidText then
+        shuffle.deck[i],shuffle.deck[#shuffle.deck]=shuffle.deck[#shuffle.deck],shuffle.deck[i]
+        break
+      end
+    end
   end
   local n=table.remove(shuffle.deck)
   shuffle.previous=n
@@ -115,7 +128,7 @@ function A:SendForItem(id,link,isStock)
     return
   end
   local language=self.db.language=='de' and 'de' or 'en'
-  local channels=self:GetAvailableChannels(cfg,language,isStock)
+  local channels=self:GetAvailableChannels(cfg,language,isStock,id)
   if #channels==0 then
     self.last.result='confirmed_no_phrases_for_language_or_mode'
     return
@@ -139,7 +152,10 @@ function A:SendForItem(id,link,isStock)
   end
   local channel=eligible[math.random(#eligible)]
   local lines=self:GetPhrases(cfg,language,channel,isStock)
-  local template=self:Pick(id,lines,language,channel,isStock)
+  local template
+  if self.PickLibrary then template=self:PickLibrary(id,language,channel,isStock)
+  else template=self:Pick(id,lines,language,channel,isStock) end
+  if not template then self.last.result="confirmed_no_phrases_for_language_or_mode"; return end
   if template:find('{item}',1,true)
      and (type(link)~='string' or not link:find('|Hitem:',1,true)) then
     self.last.result='confirmed_missing_genuine_item_link_no_send'

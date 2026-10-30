@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Replace manual sample imports with shared read-only default pools and category-wide disable flags.
+- Automatically select matching racial English pools, including Gnome; unknown or conflicting race data uses neutral defaults.
+- Preserve legacy arrays and effective-empty opt-outs; add explicit ownership recovery for ambiguous historical sample matches.
+- Add migration/race/selection regressions and document remaining client verification.
 - Seed missing Last Item pools immediately when changing output mode.
 - Invalidate pending casts when delayed bag scans reveal shared-spell ambiguity.
 - Guard optional item-class metadata during Hearthstone and known-item scans.

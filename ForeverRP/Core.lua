@@ -30,7 +30,7 @@ function A:Remember(id, meta)
   if not self.db then return end
   local item = self.db.items[id]
   if type(item)~='table' then
-    item = {enabled=false, lines={}, name=meta.name or ('Item ' .. id)}
+    item = {enabled=false, lines={}, librarySchema=1, name=meta.name or ('Item ' .. id)}
     self.db.items[id] = item
   end
   if meta.name then item.name=meta.name end
@@ -91,6 +91,7 @@ function A:Init()
       end
     end
   end
+  if self.InitLibrary then self:InitLibrary() end
   self:ResetInventory()
   -- Last Item defaults ON for already enabled consumables, unless previously
   -- explicitly opted out. Hearthstone never needs a last-item notification.
@@ -99,9 +100,6 @@ function A:Init()
       cfg.outOfStockEnabled=false
     elseif cfg.enabled and cfg.outOfStockEnabled==nil then
       cfg.outOfStockEnabled=true
-    end
-    if cfg.enabled and cfg.outOfStockEnabled and self.SeedLastItemPhrases then
-      self:SeedLastItemPhrases(id,cfg)
     end
   end
   if self.SetupMinimap then self:SetupMinimap() end

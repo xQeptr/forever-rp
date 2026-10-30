@@ -1,5 +1,6 @@
 local mt={}
 mt.__index=function(o,k)
+ if k=='entry' then return nil end
  if k=='TitleText' then return o._title end
  if k=='GetText' then return function(self) return self._text or '' end end
  if k=='GetHeight' then return function(self) return self._height or 0 end end
@@ -40,7 +41,7 @@ local root='ForeverRP/'
 ForeverRP={db={language='en',auto=true,showMinimap=true,defaultScope='group',globalCooldown=30,items={}},inventory={},shuffles={}}
 local A=ForeverRP
 function A:GetSettings(id) return self.db.items[id] end
-for _,file in ipairs({'Categories','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','Scopes','Emotes','Config'}) do
+for _,file in ipairs({'Categories','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','DefaultLibrary','RaceLibrary','Library','Scopes','Emotes','Config'}) do
  dofile(root..file..'.lua')
 end
 A.db.items[118]={name='Minor Healing Potion',enabled=true,lines={'takes a sip of {item}.'},sayLines={'I need {item}.'},outputMode='mixed'}
@@ -51,7 +52,7 @@ A:BuildConfig()
 assert(A.configFrame._kind=='Frame','uses independent themed window')
 assert(A.tabButtons.regular.SetSelected and A.channelButtons.me.SetSelected,'real selection-enabled tabs')
 assert(A.listScroll~=nil,'list panel built')
-assert(A.configFrame and A.listScroll and A.tabButtons.templates,'building UI')
+assert(A.configFrame and A.listScroll and A.libraryContent and not A.tabButtons.templates,'building inline default UI')
 A:SelectItem(118)
 assert(A.textEditor:GetText()=='takes a sip of {item}.','loaded correct regular phrase')
 A.textEditor:SetText('consumes a {item} politely.')
@@ -66,12 +67,13 @@ A.textEditor:SetText('More {item}, please.')
 A.editorDirty=true
 A:SwitchTab('last')
 assert(A.db.items[118].sayLines[1]=='More {item}, please.','save on tab switch')
-A:SwitchTab('templates')
-assert(A.templateKind=='last','templates inherit last item mode')
-A.templateSelection={[1]=true}
-A:ApplyInlineTemplates('selected')
-assert(A.activeTab=='last','templates return to appropriate editor')
-assert(#A.db.items[118].outSayLines==1,'template saved in last-item /say')
+assert(A.libraryRows and #A.libraryRows>2,'default library rows missing')
+local checkbox
+for _,r in ipairs(A.libraryRows) do if r.entry then checkbox=r.checkbox;break end end
+assert(checkbox,'missing default disable checkbox')
+checkbox:SetChecked(true);checkbox._script_OnClick(checkbox)
+assert(next(A.db.defaultDisabled),'default disable not saved')
+assert(A.db.items[118].outSayLines==nil,'default materialized into item')
 A:SwitchChannel('me')
 A:SwitchTab('regular')
 assert(A.textEditor:GetText()=='consumes a {item} politely.','regular /me unchanged')
@@ -89,7 +91,7 @@ assert(A.db.items[118].enabled==not prior,'row click does not toggle')
 row.status._script_OnClick(row.status)
 assert(A.db.items[118].enabled==prior,'second row click does not restore')
 assert(A.db.items[118].outOfStockEnabled==true,'stock not ON by default')
-assert(#A:GetPhrases(A.db.items[118],'en','say',true)>0 or #A:GetPhrases(A.db.items[118],'en','me',true)>0,'default stock phrases not seeded')
+assert(#A:GetResolvedPhrases(118,'en','say',true)>0 or #A:GetResolvedPhrases(118,'en','me',true)>0,'default stock phrases not seeded')
 A.stockCheck:SetChecked(false);A.stockCheck._script_OnClick(A.stockCheck)
 assert(A.db.items[118].outOfStockEnabled==false,'last-item optout failed')
 row.status._script_OnClick(row.status);row.status._script_OnClick(row.status)
@@ -162,9 +164,34 @@ end
 cfg.outputMode='me';cfg.outOfStockEnabled=true
 local custom={'custom last me'};cfg.outMeLines=custom;cfg.outSayLines=nil
 chooseMode('say')
-assert(cfg.outputMode=='say' and #cfg.outSayLines>0 and cfg.outMeLines==custom,'mode switch omitted Last Item say default')
+assert(cfg.outputMode=='say' and cfg.outSayLines==nil and #A:GetResolvedPhrases(118,'en','say',true)>0 and cfg.outMeLines==custom,'mode switch omitted Last Item say default')
 local empty={};cfg.outSayLines=empty;chooseMode('mixed')
 assert(cfg.outSayLines==empty and cfg.outMeLines==custom,'mode switch overwrote existing pools')
 cfg.outOfStockEnabled=false;cfg.outSayLines=nil;chooseMode('say')
 assert(cfg.outSayLines==nil and cfg.outOfStockEnabled==false,'mode switch ignored Last Item opt-out')
 print('PASS v0.9.17 mock WoW UI: optional placeholder, exact newlines, validation, restore, autosave, icon layer, cursor scrolling, mode defaults')
+
+-- Default sections follow tab/channel/category changes and preserve bad drafts.
+A:SelectItem(118);A:SwitchTab('regular');A:SwitchChannel('me')
+local cfg=A.db.items[118];cfg.autoCategory='potion';A:RefreshDetails()
+local header=A.libraryRows[1]
+header._script_OnClick(header)
+assert(A.libraryCollapsed.universal==true,'general section did not collapse')
+header._script_OnClick(header)
+assert(A.libraryCollapsed.universal==false,'general section did not expand')
+local row
+for _,r in ipairs(A.libraryRows)do if type(r.entry)=='table'then row=r;break end end
+assert(row and row.entry.category=='potion' and not row.entry.stock and row.entry.channel=='me')
+local disabled=row.entry.id;row.checkbox:SetChecked(true);row.checkbox._script_OnClick(row.checkbox)
+A.db.items[1179].autoCategory='potion';A:SelectItem(1179)
+assert(A:IsDefaultDisabled(disabled),'disable did not survive item switch')
+A:SwitchTab('last');A:SwitchChannel('say')
+for _,r in ipairs(A.libraryRows)do
+ if r:IsShown() and type(r.entry)=='table'then assert(r.entry.stock and r.entry.channel=='say')end
+end
+A.textEditor:SetText(string.rep('x',201));A.editorDirty=true
+local tab,channel,item=A.activeTab,A.activeChannel,A.selectedID
+A:SwitchTab('regular');A:SwitchChannel('me');A:SelectItem(118)
+assert(A.activeTab==tab and A.activeChannel==channel and A.selectedID==item,'invalid draft lost on library switch')
+assert(A.textEditor:GetText()==string.rep('x',201))
+io.write('PASS inline defaults UI: collapse, category sharing, pool switches, invalid drafts\n')

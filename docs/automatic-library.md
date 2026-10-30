@@ -1,0 +1,100 @@
+# Automatic RP library (planned 0.9.18 feature; source version unchanged)
+
+Defaults are immutable source entries, resolved by category, language, Regular/Last
+Item and /me-/say. They are never copied into new item settings. Existing sample
+modules remain available as historical reference. The frozen registry covers their
+complete public library; revised Healthstone wording retains `legacyText` aliases.
+IDs are explicit literals: do not renumber, reuse or derive them from runtime array
+positions. Text edits retain the ID and, when needed, a historical migration alias.
+
+## Race selection
+
+`UnitRace("player")` is guarded by pcall and secret-value checks. The stable
+FileString is mandatory. If an ID is supplied it must agree with the known Retail
+mapping; unknown/custom IDs, unknown FileStrings, mismatches and missing/throwing
+APIs give general templates only. No localized race-name guessing, faction guessing,
+manual racial selector or numeric-only fallback exists. No Forever-specific ID is
+assumed. Recognized races without authored templates also use general templates.
+The Blizzard API definition is mirrored in
+[UnitDocumentation.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua).
+
+Authored English pools cover Forsaken (`Scourge`), Dwarf, Gnome, Orc, Troll, Tauren,
+Human and Night Elf. Gnome uses teal; the section heading alone carries the subtle
+race color. Each authored race/category/pool has two new entries. Hearthstone has
+no Last Item defaults. Old explicitly undead/Lordaeron flavor is restricted to
+Scourge, including dormant German templates. Healthstones describe breaking fel
+stones; no charge support or change to consumption confirmation is introduced.
+
+## Selection and controls
+
+Both existing RP tabs and /me-/say subtabs remain. The editor holds per-item custom
+texts; two collapsible sections underneath list general and recognized racial
+defaults. Checked means **disabled**, shared across every item in that category and
+pool via `ForeverRPDB.defaultDisabled[stableID]`. The full phrase is available on
+hover. No library import/selection/materialization actions remain.
+
+With both default sources available, the default source draw is 70% general and
+30% matching race. With only one source, that source is used. Each custom phrase
+receives one ticket against the combined number of eligible defaults; after the
+default side wins, its 70:30 split applies. For example 30 general + 2 racial + 1
+custom gives the custom 1/33 of draws. Custom text identical to an active default
+appears once, as explicitly owned custom text. Shuffles are maintained separately
+for each item/pool/source and invalidate on membership changes. No-repeat is kept
+when alternatives exist. If a user reduces a source to one phrase and it was just
+used, another available source takes precedence over the weighted draw; with only
+one total phrase repetition is unavoidable. Empty means no send, no fallback and
+no cooldown expenditure. There is no cross-language fallback to English.
+
+## Non-destructive migration and unavoidable ambiguity
+
+The old addon stored imported sample strings and user-authored strings in the same
+arrays with **no provenance**. A deliberately identical own phrase cannot be
+reliably distinguished from an import. The migration does not claim otherwise.
+
+- The original arrays, numeric item IDs and all existing settings remain stored.
+  Initialization adds only `librarySchema=1`, `libraryLegacyEmpty` and the global
+  disable map. No phrases are rewritten/deleted during initialization.
+- Exact known historical library strings (including aliases) are treated as
+  library matches at runtime and hidden from the custom editor. They cannot
+  duplicate defaults or evade default disables. Matching spans old categories so
+  changing an item's category cannot turn imports into ungoverned custom texts.
+- Altered/custom phrases are eligible as per-item text. Saving the custom editor
+  keeps unclaimed historical matches in the original saved array. Intentionally
+  removed, explicitly owned custom texts remain deletable.
+- **Edit preserved matches as own texts** loads the retained strings for review.
+  The action marks a draft; ordinary validated autosave/blur/item switch claims
+  entered matching strings in `libraryCustom[field][text]=true`. Those deliberate
+  own texts then operate independently of default disables. Invalid drafts remain
+  subject to the existing validation/discard behavior. Merely opening the addon
+  never claims ownership.
+- Existing table pools with zero valid phrases, including empty/blank/invalid-only
+  pools, retain their no-output behavior via `libraryLegacyEmpty[field]`. The UI
+  offers an explicit per-item/pool action to enable defaults. New inventory items
+  carry the schema marker from creation so reload cannot mistake their initially
+  empty custom editor for an old opt-out.
+- Previously deleted individual sample strings cannot be inferred as historical
+  opt-outs from a partially filled old array: imports might simply have been
+  selective. No automatic global disable is invented from absence. Existing
+  `defaultDisabled` flags remain untouched. This ambiguity and intentional-equal
+  ownership recovery warrant leaving the feature PR open for migration review.
+- German own text and stock arrays remain untouched and dormant under the existing
+  English-only initialization. No English stock pool is fabricated for German.
+
+Back up real SavedVariables before client trials. Downgrading retains the old
+arrays (and ignores the additive metadata); it cannot reproduce the new central
+library or disable behavior.
+
+## Verification and remaining client work
+
+Regression coverage: all three existing mock suites plus `tests/mock_library.lua`;
+Gnome/Forsaken isolation, unknown/conflicting/secret race data, stable IDs/reordering,
+exact deterministic 70:30, category-wide disables across Potion IDs, custom ownership,
+legacy aliases/retention, all-disabled no-send, empty/malformed pools, reload/new
+items, DE preservation, UI collapse/autosave/tab-channel switches and invalid drafts.
+Build and release workflows include the fourth suite; no release is created here.
+
+Real Retail/Forever UI, client race FileStrings/IDs, item events, restricted API
+behavior and external /me-/say delivery have **not** been tested. Existing scanner,
+Healthstone charge limitations, three-second correlation, shared cooldown,
+Hearthstone cast-start/120-second throttle and chat-lockdown rules remain in force.
+The PR records the actual local, independent-review and Actions results.

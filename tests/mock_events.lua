@@ -21,7 +21,7 @@ C_Timer=nil
 SLASH_FOREVERRP1=nil
 SlashCmdList={}
 local function ok(x,msg) if not x then error(msg,2) end end
-local files={'Core.lua','Compat.lua','Categories.lua','Samples.lua','LocalizedSamples.lua','ExtendedSamples.lua','AlcoholSamples.lua','StockSamples.lua','Inventory.lua','Scopes.lua','Emotes.lua','Config.lua','Minimap.lua'}
+local files={'Core.lua','Compat.lua','Categories.lua','Samples.lua','LocalizedSamples.lua','ExtendedSamples.lua','AlcoholSamples.lua','StockSamples.lua','DefaultLibrary.lua','RaceLibrary.lua','Library.lua','Inventory.lua','Scopes.lua','Emotes.lua','Config.lua','Minimap.lua'}
 for _,f in ipairs(files) do assert(loadfile(BASE..f))() end
 local a=ForeverRP
 -- pre-existing settings survive migration.
@@ -34,7 +34,9 @@ ok(a.db.items[118].lines[1]=='uses a {item}.','legacy phrases changed')
 ok(a.db.globalCooldown==30,'default cooldown missing')
 ok(a.db.items[1179].outOfStockEnabled==false, 'explicit legacy off switched on')
 ok(a.db.items[333].outOfStockEnabled==true, 'legacy enabled nil should default on')
-ok(#a.db.items[333].outMeLines==20,'legacy stock pack should be seeded')
+ok(a.db.items[333].outMeLines==nil and #a:GetResolvedPhrases(333,'en','me',true)>0,'stock defaults must resolve without copying')
+-- Isolate event invariants using custom texts; library integration has its own suite.
+for _,entry in ipairs(a.DefaultEntries) do a:SetDefaultDisabled(entry.id,true) end
 local link='|cffffffff|Hitem:118::::::::|h[Minor Healing Potion]|h|r'
 local milk='|cffffffff|Hitem:1179::::::::|h[Ice Cold Milk]|h|r'
 local function tick(t) clock=t end

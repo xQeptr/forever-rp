@@ -10,7 +10,7 @@ C_Container={GetContainerNumSlots=function(b)return #(bags[b] or {})end,
  GetContainerItemInfo=function(b,s)return bags[b][s]end}
 C_Item={GetItemSpell=function(id)if not missing then return 'Use',111 end end,
  GetItemInfoInstant=function()return nil,nil,nil,nil,nil,0,1 end}
-for _,name in ipairs({'Core','Categories','Inventory','Scopes','Emotes','StockSamples','Config'})do dofile('ForeverRP/'..name..'.lua')end
+for _,name in ipairs({'Core','Categories','Inventory','Scopes','Emotes','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','DefaultLibrary','RaceLibrary','Library','Config'})do dofile('ForeverRP/'..name..'.lua')end
 local a=ForeverRP
 a.SetupMinimap=function()end
 local function item(id,n)return {itemID=id,stackCount=n,hyperlink=not missing and '|Hitem:'..id..'|h[Item]|h' or nil}end
@@ -20,7 +20,7 @@ a.SendForItem=function(_,id,link,stock)sends[#sends+1]={id=id,stock=stock}end
 local function reset()
  clock=clock+10;missing=false;bags={[0]={item(118,2)}}
  ForeverRPDB={items={[118]={enabled=true,outOfStockEnabled=true}},defaultScope='always'}
- a:Init();a.lastCastGUID=nil;a.lastCastSpell=nil;a.lastConfirmedID=nil;sends={}
+ a:Init();for _,e in ipairs(a.DefaultEntries)do a:SetDefaultDisabled(e.id,true)end;a.lastCastGUID=nil;a.lastCastSpell=nil;a.lastConfirmedID=nil;sends={}
 end
 for _,first in ipairs({'bag','spell'})do
  reset()
@@ -75,7 +75,7 @@ reset();ForeverRPDB.items[42]=false;ForeverRPDB.items[118].lines={42,'valid text
 ForeverRPDB.items[118].outputMode='say';a:Init();a:Init()
 assert(a.db.invalidSavedValues[42]==false)
 assert(a.db.items[118].lines[1]==42 and a:GetPhrases(a.db.items[118],'en','me')[1]=='valid text')
-assert(#a.db.items[118].outSayLines==20)
+assert(a.db.items[118].outSayLines==nil,'defaults must not materialize')
 local custom={'custom'};a.db.items[118].outSayLines=custom;a:Init();assert(a.db.items[118].outSayLines==custom)
 -- Secret values must never reach comparisons/indexing or change cast state.
 local secret={};function issecretvalue(v)return rawequal(v,secret)end
@@ -83,17 +83,6 @@ local before=a.lastCastGUID
 a:OnSpellSucceeded(secret,111);a:OnCastStart('x',secret);a:OnCastInterrupted(secret,111,'failed')
 a.eventFrame.event(nil,'UNIT_SPELLCAST_SUCCEEDED',secret,secret,secret)
 assert(a.lastCastGUID==before)
--- Import failure preserves saved pool, selection and tab.
-a.selectedID=118;a.activeChannel='say';a.templateKind='regular';a.activeTab='templates'
-a.templateSelection={[1]=true};local selection=a.templateSelection
-local original={'old'};a.db.items[118].sayLines=original
-a.inventory[118].link='|Hitem:118|h['..string.rep('x',240)..']|h'
-a.GetTemplatePack=function()return {'uses {item} with considerable ceremony.'}end
-a.editorStatus={SetText=function()end}
-assert(a:ApplyInlineTemplates('selected')==false)
-assert(a.db.items[118].sayLines==original and a.templateSelection==selection and a.activeTab=='templates')
-io.write('PASS real scanner, ambiguity, metadata, migration, secrets and import regressions\n')
-
 -- Real sender plus real scanner: invalid saved text must never spend cooldown.
 a.SendForItem=realSendForItem
 a.Say=function()end

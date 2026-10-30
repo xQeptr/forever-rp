@@ -179,8 +179,8 @@ function A:ConfigItems()
     local anyPhrases = false
     for _, language in ipairs({'en', 'de'}) do
       for _, channel in ipairs({'me', 'say'}) do
-        if #self:GetPhrases(cfg, language, channel) > 0
-          or #self:GetPhrases(cfg, language, channel, true) > 0 then
+        if #self:GetResolvedPhrases(id, language, channel) > 0
+          or #self:GetResolvedPhrases(id, language, channel, true) > 0 then
           anyPhrases = true
         end
       end
@@ -209,18 +209,6 @@ function A:CountRemembered()
   for _ in pairs(self.db.items) do n = n + 1 end
   return n
 end
--- A missing preference means the new default is ON for newly enabled and
--- legacy already-enabled items. Explicit false is preserved as the opt-out.
-function A:SeedLastItemPhrases(id, cfg)
-  if id==6948 or not cfg or not cfg.outOfStockEnabled then return end
-  local mode=self.OutputModes[cfg.outputMode] and cfg.outputMode or 'me'
-  for _,channel in ipairs({'me','say'}) do
-    local field=channel=='me' and 'outMeLines' or 'outSayLines'
-    if (mode=='mixed' or mode==channel) and cfg[field]==nil then
-      self:SetPhrases(cfg,'en',channel,self:GetStockSamplePack(self:GetCategory(id),channel),true)
-    end
-  end
-end
 function A:ToggleItemEnabled(id)
   local cfg=self.db and self.db.items[id]
   if not cfg then return end
@@ -231,7 +219,6 @@ function A:ToggleItemEnabled(id)
     elseif cfg.outOfStockEnabled==nil then
       cfg.outOfStockEnabled=true
     end
-    self:SeedLastItemPhrases(id,cfg)
   end
   self:RefreshConfig()
   if self.editorStatus then self.editorStatus:SetText('RP '..(cfg.enabled and 'enabled' or 'disabled')..' for '..nameFor(id,cfg,self.inventory[id])..'. Saved automatically.') end
@@ -321,7 +308,7 @@ function A:SaveEditor()
     return false
   end
   local stock = self.activeTab == 'last'
-  self:SetPhrases(cfg, 'en', self.activeChannel or 'me', lines, stock)
+  self:SetCustomPhrases(self.selectedID, 'en', self.activeChannel or 'me', lines, stock)
   self.editorDirty = false
   self.shuffles = {}
   self.editorStatus:SetText('|cff92db9eSaved ' .. #lines .. ' /' .. (self.activeChannel or 'me') ..
@@ -331,7 +318,7 @@ end
 function A:ReloadEditor()
   if not self.textEditor then return end
   local cfg = self.selectedID and self.db.items[self.selectedID]
-  local lines = self:GetPhrases(cfg, 'en', self.activeChannel or 'me', self.activeTab == 'last')
+  local lines = cfg and self:GetCustomPhrases(self.selectedID, 'en', self.activeChannel or 'me', self.activeTab == 'last') or {}
   self.loadingEditor = true
   self.textEditor:SetText(formatLines(lines))
   self.textEditor:SetCursorPosition(0)
@@ -341,16 +328,11 @@ function A:ReloadEditor()
   self:RefreshTextInfo()
 end
 function A:SwitchTab(tab)
-  if tab ~= 'regular' and tab ~= 'last' and tab ~= 'templates' then return end
+  if tab ~= 'regular' and tab ~= 'last' then return end
   if self.activeTab == tab then return end
   if not self:SaveEditor() then return end
-  if tab == 'templates' then
-    self.templateKind = self.activeTab == 'last' and 'last' or 'regular'
-    self.templateSelection = {}
-    self.templatePreviewNumber = 1
-  end
   self.activeTab = tab
-  if tab ~= 'templates' then self:ReloadEditor() end
+  self:ReloadEditor()
   self:RefreshDetails()
 end
 function A:SwitchChannel(channel)
@@ -358,8 +340,7 @@ function A:SwitchChannel(channel)
   if self.activeChannel == channel then return end
   if not self:SaveEditor() then return end
   self.activeChannel = channel
-  if self.activeTab ~= 'templates' then self:ReloadEditor() end
-  self.templateSelection = {}
+  self:ReloadEditor()
   self:RefreshDetails()
 end
 function A:SelectItem(id)
@@ -369,65 +350,18 @@ function A:SelectItem(id)
   self.selectedID = id
   -- Clicking an item shows its phrases immediately, not a separate Items tab.
   self.activeTab = 'regular'
-  self.templateSelection = {}
-  self.templatePreviewNumber = 1
   self:ReloadEditor()
   self.editorStatus:SetText('Item selected. Valid edits save automatically.')
   self:RefreshConfig()
 end
 function A:RefreshTextInfo()
   if not self.textCount then return end
-  local cfg = self.selectedID and self.db.items[self.selectedID]
-  if not cfg then self.textCount:SetText(''); return end
-  self.textCount:SetText('Regular: ' .. #self:GetPhrases(cfg,'en','me') .. ' /me, ' ..
-    #self:GetPhrases(cfg,'en','say') .. ' /say    |    Last: ' ..
-    #self:GetPhrases(cfg,'en','me',true) .. ' /me, ' ..
-    #self:GetPhrases(cfg,'en','say',true) .. ' /say')
+  local id=self.selectedID
+  if not id then self.textCount:SetText('');return end
+  self.textCount:SetText('Available - Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
+    #self:GetResolvedPhrases(id,'en','say')..' /say | Last: '..
+    #self:GetResolvedPhrases(id,'en','me',true)..' /me, '..#self:GetResolvedPhrases(id,'en','say',true)..' /say')
 end
-function A:GetEditorSamplePack(category)
-  if self.activeTab == 'last' or (self.activeTab == 'templates' and self.templateKind == 'last') then
-    return self:GetStockSamplePack(category, self.activeChannel or 'me')
-  end
-  return self:GetSamplePack(category, 'en', self.activeChannel or 'me')
-end
-function A:GetTemplatePack()
-  if not self.selectedID then return {} end
-  local category = self:GetCategory(self.selectedID)
-  return self:GetEditorSamplePack(category)
-end
-function A:ApplyInlineTemplates(which)
-  if not self.selectedID then return end
-  local cfg = self.db.items[self.selectedID]
-  local pack = self:GetTemplatePack()
-  local stock = self.templateKind == 'last'
-  local channel = self.activeChannel or 'me'
-  local existing = self:GetPhrases(cfg, 'en', channel, stock)
-  local lines, seen = {}, {}
-  for _, v in ipairs(existing) do lines[#lines+1]=v; seen[v]=true end
-  local added = 0
-  for i, phrase in ipairs(pack) do
-    if (which == 'all' or self.templateSelection[i]) and not seen[phrase] then
-      lines[#lines+1] = phrase
-      seen[phrase] = true
-      added = added + 1
-    end
-  end
-  local meta=self.inventory and self.inventory[self.selectedID]
-  local validated,err=self:ParseLines(table.concat(lines,'\n'),meta and meta.link)
-  if not validated then
-    self.editorStatus:SetText('|cffff7777Cannot import: '..err..'|r')
-    return false
-  end
-  self:SetPhrases(cfg, 'en', channel, validated, stock)
-  self.shuffles = {}
-  self.templateSelection = {}
-  self.activeTab = stock and 'last' or 'regular'
-  self:ReloadEditor()
-  self:RefreshDetails()
-  self.editorStatus:SetText('|cff92db9eAdded ' .. added .. ' templates; ' ..
-    #lines .. ' total in this phrase pool. Saved automatically.|r')
-end
-
 A.exampleItemNames = {
   healthstone='Healthstone', potion='Minor Healing Potion', drink='Ice Cold Milk',
   food='Spiced Bread', bufffood='Smoked Bear Meat', elixir='Elixir of Fortitude',
@@ -444,35 +378,76 @@ function A:PreviewTemplateLine(template, category)
   local substitution = '|cffffd15b[' .. name .. ']|r'
   return tostring(template or ''):gsub('{item}', function() return substitution end)
 end
-function A:RefreshInlineLibrary()
-  if not self.templateRows then return end
-  local pack = self:GetTemplatePack()
-  local category = self.selectedID and self:GetCategory(self.selectedID) or 'other'
-  self.templateHeading:SetText((self.categoryNames[category] or 'Other') ..
-    '  |  ' .. (self.templateKind == 'last' and 'Last Item' or 'Regular') ..
-    ' /' .. (self.activeChannel or 'me') .. '  |  ' .. #pack .. ' English templates')
-  local count = 0
-  for _, selected in pairs(self.templateSelection or {}) do if selected then count=count+1 end end
-  self.selectedTemplateInfo:SetText(count .. ' selected')
-  for i, row in ipairs(self.templateRows) do
-    local template = pack[i]
-    if template then
-      row.sampleIndex = i
-      row.fullText = template
-      row.checkbox:SetChecked(self.templateSelection[i] or false)
-      fitName(row.display, template, 280, row.measurer)
-      row:Show()
-    else
-      row.sampleIndex = nil
-      row:Hide()
+function A:RefreshDefaultLibrary()
+  if not self.libraryContent then return end
+  for _,row in ipairs(self.libraryRows or {}) do row:Hide() end
+  self.libraryRows=self.libraryRows or {}
+  if not self.selectedID then return end
+  local u,r=self:GetLibraryEntries(self.selectedID,'en',self.activeChannel or 'me',self.activeTab=='last')
+  local race,info=self:GetPlayerRace()
+  local y,n=0,0
+  self.libraryCollapsed=self.libraryCollapsed or {}
+  local function nextRow()
+    n=n+1
+    local row=A.libraryRows[n]
+    if not row then
+      row=CreateFrame('Button',nil,A.libraryContent)
+      row:SetSize(616,30)
+      row.display=label(row,'',30,-7)
+      row.display:SetWidth(580);row.display:SetJustifyH('LEFT')
+      row.checkbox=CreateFrame('CheckButton',nil,row,'UICheckButtonTemplate')
+      row.checkbox:SetSize(25,25);row.checkbox:SetPoint('LEFT',row,'LEFT',0,0)
+      row.checkbox:SetScript('OnClick',function(cb)
+        if row.entry then
+          A:SetDefaultDisabled(row.entry.id,cb:GetChecked())
+          A:RefreshDefaultLibrary(); A:RefreshTextInfo()
+        end
+      end)
+      row:SetScript('OnEnter',function()
+        if row.entry and GameTooltip then
+          GameTooltip:SetOwner(row,'ANCHOR_RIGHT')
+          GameTooltip:SetText(A:PreviewTemplateLine(row.entry.text))
+          GameTooltip:Show()
+        end
+      end)
+      row:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+      A.libraryRows[n]=row
+    end
+    row:ClearAllPoints();row:SetPoint('TOPLEFT',A.libraryContent,'TOPLEFT',0,-y)
+    y=y+30;row:Show();row.entry=nil
+    return row
+  end
+  for _,section in ipairs({{key='universal',name='General templates',entries=u},
+      {key='race',name=info and (info.name..' templates') or 'Race unknown - general templates only',entries=r}}) do
+    local row=nextRow()
+    row.checkbox:Hide()
+    row.display:SetText((self.libraryCollapsed[section.key] and '+ ' or '- ')..section.name..' ('..#section.entries..')')
+    local color=section.key=='race' and info and info.color or {.83,.75,.59}
+    row.display:SetTextColor(color[1],color[2],color[3])
+    local sectionKey=section.key
+    row:SetScript('OnClick',function()
+      A.libraryCollapsed[sectionKey]=not A.libraryCollapsed[sectionKey];A:RefreshDefaultLibrary()
+    end)
+    if not self.libraryCollapsed[section.key] then
+      for _,entry in ipairs(section.entries) do
+        local item=nextRow();item.entry=entry
+        item.checkbox:Show();item.checkbox:SetChecked(self:IsDefaultDisabled(entry.id))
+        item.display:SetTextColor(.78,.81,.82)
+        fitName(item.display,entry.text,575)
+        item:SetScript('OnClick',function()
+          A:SetDefaultDisabled(entry.id,not A:IsDefaultDisabled(entry.id));A:RefreshDefaultLibrary();A:RefreshTextInfo()
+        end)
+      end
     end
   end
-  self.templateContent:SetHeight(math.max(246, #pack * 29))
-  if self.templateScroll.UpdateScrollChildRect then self.templateScroll:UpdateScrollChildRect() end
-  local n = self.templatePreviewNumber or 1
-  if not pack[n] then n=1; self.templatePreviewNumber=1 end
-  self.templatePreview:SetText(pack[n] and self:PreviewTemplateLine(pack[n], category) or 'No templates available.')
-  self.previewInfo:SetText(pack[n] and ('Template ' .. n .. ' / ' .. #pack) or 'No template')
+  local cfg=self.db.items[self.selectedID]
+  local field=self:PhraseField('en',self.activeChannel or 'me',self.activeTab=='last')
+  if type(cfg.libraryLegacyEmpty)=='table' and cfg.libraryLegacyEmpty[field] then
+    local row=nextRow();row.checkbox:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
+    row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary() end)
+  end
+  self.libraryContent:SetHeight(math.max(y,100))
+  if self.libraryScroll.UpdateScrollChildRect then self.libraryScroll:UpdateScrollChildRect() end
 end
 function A:RefreshDetails()
   if not self.configFrame then return end
@@ -505,13 +480,8 @@ function A:RefreshDetails()
   for channel, b in pairs(self.channelButtons or {}) do
     b:SetSelected(channel == self.activeChannel)
   end
-  local inTemplates = self.activeTab == 'templates'
-  self.editorPane:SetShown(not inTemplates)
-  self.templatePane:SetShown(inTemplates)
-  if inTemplates then
-    self.templateKindDropdown:SetCaption(self.templateKind == 'last' and 'Last Item' or 'Regular')
-    self:RefreshInlineLibrary()
-  end
+  self.editorPane:Show()
+  self:RefreshDefaultLibrary()
   self:RefreshTextInfo()
 end
 function A:RefreshConfig()
@@ -531,7 +501,6 @@ function A:RefreshConfig()
     local row = self.listButtons[i]
     if not row then row = self:NewInventoryRow(self.listContent, i); self.listButtons[i]=row end
     row.itemID, row.fullName = entry.id, entry.title
-    local active = entry.cfg.enabled and #self:GetAvailableChannels(entry.cfg, 'en')>0
     row.statusText:SetText(entry.cfg.enabled and 'ON' or 'OFF')
     row.statusText:SetTextColor(entry.cfg.enabled and 0.37 or 0.7, entry.cfg.enabled and 0.94 or 0.7, entry.cfg.enabled and 0.58 or 0.7)
     fitName(row.name, entry.title, 142, row.measurer)
@@ -568,9 +537,6 @@ function A:BuildConfig()
   self.configFrame=f
   self.activeTab='regular'
   self.activeChannel='me'
-  self.templateKind='regular'
-  self.templateSelection={}
-  self.templatePreviewNumber=1
   self.editorDirty=false
   self.listButtons={}
 
@@ -694,7 +660,6 @@ function A:BuildConfig()
     if not A.selectedID then return end
     local cfg=A.db.items[A.selectedID]
     cfg.outOfStockEnabled=(A.selectedID~=6948 and not not c:GetChecked())
-    A:SeedLastItemPhrases(A.selectedID,cfg)
     A:RefreshDetails()
     A.editorStatus:SetText('Last-item RP ' .. (cfg.outOfStockEnabled and 'enabled' or 'disabled') ..
       '. Choose Last Item and add phrases if needed.')
@@ -707,7 +672,6 @@ function A:BuildConfig()
   end,function(value)
     if not A.selectedID then return end
     A.db.items[A.selectedID].outputMode=value
-    A:SeedLastItemPhrases(A.selectedID,A.db.items[A.selectedID])
     A:RefreshDetails()
   end,function()
     local cfg=A.selectedID and A.db.items[A.selectedID]
@@ -721,7 +685,7 @@ function A:BuildConfig()
   self.tabButtons={}
   self.tabButtons.regular=navTab(f,'Regular RP',344,-237,208,32,function() A:SwitchTab('regular') end)
   self.tabButtons.last=navTab(f,'Last Item RP',554,-237,208,32,function() A:SwitchTab('last') end)
-  self.tabButtons.templates=navTab(f,'Template Library',764,-237,241,32,function() A:SwitchTab('templates') end)
+  label(f,'Defaults are active automatically',773,-248)
   self.channelButtons={}
   self.channelButtons.me=navTab(f,'/me',346,-277,107,25,function() A:SwitchChannel('me') end,true)
   self.channelButtons.say=navTab(f,'/say',456,-277,107,25,function() A:SwitchChannel('say') end,true)
@@ -734,8 +698,8 @@ function A:BuildConfig()
   self.editorPane=editorPane
   local editorBorder=CreateFrame('Frame',nil,editorPane)
   editorBorder:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,0)
-  editorBorder:SetSize(662,284)
-  surface(editorBorder,0,0,662,284,{.105,.17,.215,.90},{.42,.39,.29,.52})
+  editorBorder:SetSize(662,120)
+  surface(editorBorder,0,0,662,120,{.105,.17,.215,.90},{.42,.39,.29,.52})
   local editorScroll=CreateFrame('ScrollFrame',nil,editorBorder,'UIPanelScrollFrameTemplate')
   editorScroll:SetPoint('TOPLEFT',editorBorder,'TOPLEFT',11,-10)
   editorScroll:SetPoint('BOTTOMRIGHT',editorBorder,'BOTTOMRIGHT',-29,9)
@@ -744,7 +708,7 @@ function A:BuildConfig()
   edit:SetAutoFocus(false)
   edit:SetFontObject('ChatFontNormal')
   edit:SetWidth(605)
-  edit:SetHeight(260)
+  edit:SetHeight(96)
   edit:SetMaxBytes(36000)
   edit:SetScript('OnEscapePressed',function(e) e:ClearFocus() end)
   edit:SetScript('OnEditFocusLost',function()
@@ -781,7 +745,7 @@ function A:BuildConfig()
     if C_Timer and C_Timer.After then C_Timer.After(0,followCursor) end
   end)
   edit:SetScript('OnTextChanged',function(e)
-    if e.GetStringHeight then e:SetHeight(math.max(260,(e:GetStringHeight() or 0)+30)) end
+    if e.GetStringHeight then e:SetHeight(math.max(96,(e:GetStringHeight() or 0)+30)) end
     if A.loadingEditor then return end
     A.editorDirty=true
     A.autoSaveRevision=(A.autoSaveRevision or 0)+1
@@ -802,7 +766,7 @@ function A:BuildConfig()
   editorScroll:SetScrollChild(edit)
   self.editorScroll=editorScroll
   self.textEditor=edit
-  button(editorPane,'Local Preview',137,27,0,-295,function()
+  button(editorPane,'Local Preview',137,27,0,-127,function()
     if not A.selectedID then return end
     local currentMeta=A.inventory and A.inventory[A.selectedID]
     local lines,err=A:ParseLines(A.textEditor:GetText(),currentMeta and currentMeta.link)
@@ -812,93 +776,23 @@ function A:BuildConfig()
     local phrase=lines[math.random(#lines)]:gsub('{item}',function()return link end)
     A:Say('LOCAL /'..A.activeChannel..' preview ONLY: '..phrase)
   end)
-  label(editorPane,'Auto-save after 0.7s. Enter = new phrase; {item} optional.',152,-301):SetWidth(506)
+  label(editorPane,'Auto-save after 0.7s. Enter = new phrase; {item} optional.',152,-133):SetWidth(506)
 
-  local templatePane=CreateFrame('Frame',nil,f)
-  templatePane:SetPoint('TOPLEFT',f,'TOPLEFT',343,-302)
-  templatePane:SetSize(664,342)
-  self.templatePane=templatePane
-  label(templatePane,'Source',0,-6)
-  self.templateKindDropdown=dropdown(templatePane,61,0,151,'Regular',function()
-    return {{key='regular',label='Regular'},{key='last',label='Last Item'}}
-  end,function(value)
-    A.templateKind=value; A.templateSelection={}; A.templatePreviewNumber=1
-    A:RefreshInlineLibrary()
-  end,function() return A.templateKind end)
-  self.templateHeading=label(templatePane,'',227,-8)
-  self.templateHeading:SetWidth(425)
-
-  local templateListFrame=CreateFrame('Frame',nil,templatePane)
-  templateListFrame:SetPoint('TOPLEFT',templatePane,'TOPLEFT',0,-37)
-  templateListFrame:SetSize(374,245)
-  surface(templateListFrame,0,0,374,245,{.105,.17,.215,.90},{.42,.39,.29,.52})
-  local templateScroll=CreateFrame('ScrollFrame',nil,templateListFrame,'UIPanelScrollFrameTemplate')
-  templateScroll:SetPoint('TOPLEFT',templateListFrame,'TOPLEFT',4,-4)
-  templateScroll:SetPoint('BOTTOMRIGHT',templateListFrame,'BOTTOMRIGHT',-25,4)
-  local templateContent=CreateFrame('Frame',nil,templateScroll)
-  templateContent:SetSize(340,244)
-  templateScroll:SetScrollChild(templateContent)
-  self.templateScroll,self.templateContent=templateScroll,templateContent
-  self.templateRows={}
-  for i=1,30 do
-    local row=CreateFrame('Button',nil,templateContent)
-    row:SetSize(340,27)
-    row:SetPoint('TOPLEFT',templateContent,'TOPLEFT',0,-(i-1)*29)
-    local rowShade=row:CreateTexture(nil,'BACKGROUND')
-    rowShade:SetAllPoints(row)
-    rowShade:SetColorTexture(.16,.24,.30,(i%2==0) and .45 or .18)
-    row:SetScript('OnEnter',function(self)
-      rowShade:SetColorTexture(.22,.38,.43,.84)
-      if row.sampleIndex then A.templatePreviewNumber=row.sampleIndex; A:RefreshInlineLibrary() end
-    end)
-    row:SetScript('OnLeave',function(self)
-      rowShade:SetColorTexture(.16,.24,.30,(i%2==0) and .45 or .18)
-    end)
-    local cb=CreateFrame('CheckButton',nil,row,'UICheckButtonTemplate')
-    cb:SetPoint('LEFT',row,'LEFT',1,0)
-    cb:SetSize(25,25)
-    row.checkbox=cb
-    local display=row:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
-    display:SetPoint('LEFT',row,'LEFT',30,0)
-    display:SetWidth(280)
-    display:SetJustifyH('LEFT')
-    if display.SetWordWrap then display:SetWordWrap(false) end
-    if display.SetMaxLines then display:SetMaxLines(1) end
-    row.display=display
-    row.measurer=row:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
-    row.measurer:Hide()
-    local function toggle(value)
-      if not row.sampleIndex then return end
-      A.templateSelection[row.sampleIndex]=value
-      A.templatePreviewNumber=row.sampleIndex
-      A:RefreshInlineLibrary()
-    end
-    cb:SetScript('OnClick',function(self) toggle(not not self:GetChecked()) end)
-    row:SetScript('OnClick',function() toggle(not A.templateSelection[row.sampleIndex]) end)
-    self.templateRows[i]=row
-  end
-  local previewBorder=CreateFrame('Frame',nil,templatePane)
-  previewBorder:SetPoint('TOPLEFT',templatePane,'TOPLEFT',387,-37)
-  previewBorder:SetSize(274,245)
-  surface(previewBorder,0,0,274,245,{.105,.17,.215,.90},{.42,.39,.29,.52})
-  self.previewInfo=label(previewBorder,'Template preview',12,-15,'GameFontNormal')
-  self.templatePreview=label(previewBorder,'',12,-47,'GameFontHighlight')
-  self.templatePreview:SetWidth(247)
-  self.templatePreview:SetHeight(167)
-  self.templatePreview:SetJustifyH('LEFT')
-  self.templatePreview:SetJustifyV('TOP')
-  if self.templatePreview.SetWordWrap then self.templatePreview:SetWordWrap(true) end
-  label(previewBorder,'Example item preview; stored text keeps {item}.',12,-220):SetWidth(248)
-  button(templatePane,'Select All',103,26,0,-294,function()
-    for i=1,#A:GetTemplatePack() do A.templateSelection[i]=true end
-    A:RefreshInlineLibrary()
+  label(editorPane,'Own texts above. Defaults below: checked = disabled for this category.',0,-163):SetWidth(650)
+  button(editorPane,'Edit preserved matches as own texts',270,23,0,-184,function()
+    if not A.selectedID or not A:SaveEditor() then return end
+    local cfg=A.db.items[A.selectedID]
+    local raw=A:GetPhrases(cfg,'en',A.activeChannel or 'me',A.activeTab=='last')
+    A.loadingEditor=true;A.textEditor:SetText(formatLines(raw));A.loadingEditor=false
+    A.editorDirty=true
+    A.editorStatus:SetText('Preserved matches shown. Saving explicitly claims these as own texts, independent of default disables.')
   end)
-  button(templatePane,'Clear',75,26,108,-294,function()
-    A.templateSelection={}; A:RefreshInlineLibrary()
-  end)
-  self.selectedTemplateInfo=label(templatePane,'',191,-302)
-  button(templatePane,'Add Selected',125,26,344,-294,function() A:ApplyInlineTemplates('selected') end)
-  button(templatePane,'Add All',110,26,477,-294,function() A:ApplyInlineTemplates('all') end)
+  local libraryScroll=CreateFrame('ScrollFrame',nil,editorPane,'UIPanelScrollFrameTemplate')
+  libraryScroll:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,-213)
+  libraryScroll:SetSize(635,125)
+  local content=CreateFrame('Frame',nil,libraryScroll);content:SetSize(616,125)
+  libraryScroll:SetScrollChild(content)
+  self.libraryContent,self.libraryScroll=content,libraryScroll
 
   self.editorStatus=label(f,'Select an item. Nothing is automatically emitted by configuration changes.',345,-653)
   self.editorStatus:SetWidth(652)
