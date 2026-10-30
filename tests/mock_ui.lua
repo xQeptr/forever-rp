@@ -11,7 +11,15 @@ mt.__index=function(o,k)
  if k=='GetStringHeight' then return function(self) return 30 end end
  if k=='IsShown' then return function(self) return self._shown or false end end
  if k=='CreateFontString' or k=='CreateTexture' then return function(self) return setmetatable({ _text='' },mt) end end
- if k=='SetText' then return function(self,x) self._text=x end end
+ if k=='SetText' then return function(self,x,...)
+  assert(select('#',...)==0,'addon text widgets must receive one text argument')
+  assert(type(x)=='string' or type(x)=='number','invalid widget text')
+  self._text=x
+ end end
+ if k=='SetTextColor' then return function(self,r,g,b,a)
+  for _,v in ipairs({r,g,b,a or 1}) do assert(type(v)=='number' and v>=0 and v<=1,'invalid text color') end
+  self._color={r,g,b,a or 1}
+ end end
  if k=='SetChecked' then return function(self,x) self._checked=x end end
  if k=='Show' then return function(self) self._shown=true end end
  if k=='Hide' then return function(self) self._shown=false end end
@@ -32,7 +40,17 @@ end
 UIParent=CreateFrame('Frame')
 GameTooltip=CreateFrame('Frame')
 function GameTooltip:SetHyperlink(x) self.last=x end
-function GameTooltip:SetText(x) self.last=x end
+-- Enforce the reported native color-object overload, rather than silently
+-- discarding extra Lua results. This is not a full client API simulation.
+function GameTooltip:SetText(x,color,alpha,wrap,...)
+ assert(type(x)=='string','invalid tooltip text')
+ assert(color==nil or (type(color)=='table' and type(color.GetRGBA)=='function'),
+  "bad argument #2 to 'SetText' (Usage: self:SetText(text [, color, alpha, wrap]))")
+ assert(alpha==nil or type(alpha)=='number','invalid tooltip alpha')
+ assert(wrap==nil or type(wrap)=='boolean','invalid tooltip wrap')
+ assert(select('#',...)==0,'too many tooltip arguments')
+ self.last=x
+end
 function GetTime() return 1111 end
 function time() return 1711111111 end
 function UnitName() return 'Lucien' end
@@ -54,6 +72,21 @@ assert(A.tabButtons.regular.SetSelected and A.channelButtons.me.SetSelected,'rea
 assert(A.listScroll~=nil,'list panel built')
 assert(A.configFrame and A.listScroll and A.libraryContent and not A.tabButtons.templates,'building inline default UI')
 A:SelectItem(118)
+-- Hover the actual library row: gsub's count must never reach native SetText.
+local hoverRow
+for _,r in ipairs(A.libraryRows) do if type(r.entry)=='table' then hoverRow=r;break end end
+assert(hoverRow,'missing hover row')
+local originalEntry=hoverRow.entry
+for _,text in ipairs({'plain phrase','uses {item}.','{item} then {item}.'}) do
+ hoverRow.entry={text=text}
+ hoverRow._script_OnEnter(hoverRow)
+ assert(GameTooltip.last==A:PreviewTemplateLine(text),'hover preview differs')
+ hoverRow._script_OnLeave(hoverRow)
+ assert(not GameTooltip:IsShown(),'hover tooltip did not hide')
+end
+hoverRow.entry=originalEntry
+assert(not pcall(function() GameTooltip:SetText('text',1) end),'numeric color accepted')
+assert(select('#',A:PreviewTemplateLine('{item}'))==1,'preview leaked replacement count')
 assert(A.textEditor:GetText()=='takes a sip of {item}.','loaded correct regular phrase')
 A.textEditor:SetText('consumes a {item} politely.')
 A.editorDirty=true
@@ -189,6 +222,36 @@ A:SwitchTab('last');A:SwitchChannel('say')
 for _,r in ipairs(A.libraryRows)do
  if r:IsShown() and type(r.entry)=='table'then assert(r.entry.stock and r.entry.channel=='say')end
 end
+-- Reported item, race colors, pooled row reuse and both output pools/channels.
+UnitRace=function() return 'Gnome','Gnome',7 end
+A.db.items[37863]={name='Test item',enabled=false,autoCategory='potion',lines={},outputMode='mixed'}
+A.inventory[37863]={count=1,name='Test item',autoCategory='potion'}
+A:SelectItem(37863)
+for _,tab in ipairs({'regular','last'}) do
+ for _,channel in ipairs({'me','say'}) do
+  A:SwitchTab(tab);A:SwitchChannel(channel)
+  for _,r in ipairs(A.libraryRows) do
+   if r:IsShown() and type(r.entry)=='table' then
+    r._script_OnEnter(r);r._script_OnLeave(r)
+    assert(r.display._color[1]==.78,'entry inherited race color')
+   elseif r:IsShown() and r.display:GetText():find('Gnome templates',1,true) then
+    assert(r.display._color[1]==.22 and r.display._color[2]==.69,'Gnome header color changed')
+   end
+  end
+ end
+end
+A.db.items[37863].libraryLegacyEmpty={outSayLines=true}
+A.libraryCollapsed.universal=true;A.libraryCollapsed.race=true
+A.libraryRows[3].display:SetTextColor(.22,.69,.68)
+A:RefreshDefaultLibrary()
+local foundOptOut=false
+for _,r in ipairs(A.libraryRows) do
+ if r:IsShown() and r.display:GetText():find('Legacy empty-pool',1,true) then
+  foundOptOut=true
+  assert(r.display._color[1]==.78 and r.display._color[2]==.81,'opt-out inherited a pooled header color')
+ end
+end
+assert(foundOptOut,'missing legacy opt-out row')
 A.textEditor:SetText(string.rep('x',201));A.editorDirty=true
 local tab,channel,item=A.activeTab,A.activeChannel,A.selectedID
 A:SwitchTab('regular');A:SwitchChannel('me');A:SelectItem(118)

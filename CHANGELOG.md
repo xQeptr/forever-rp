@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fix library-hover tooltip crashes caused by passing the substitution count as a native color argument; reset reused opt-out row colors.
 - Replace manual sample imports with shared read-only default pools and category-wide disable flags.
 - Automatically select matching racial English pools, including Gnome; unknown or conflicting race data uses neutral defaults.
 - Preserve legacy arrays and effective-empty opt-outs; add explicit ownership recovery for ambiguous historical sample matches.

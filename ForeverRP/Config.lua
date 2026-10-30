@@ -376,7 +376,9 @@ function A:PreviewTemplateLine(template, category)
     name = (meta and meta.name) or (cfg and cfg.name) or name
   end
   local substitution = '|cffffd15b[' .. name .. ']|r'
-  return tostring(template or ''):gsub('{item}', function() return substitution end)
+  -- gsub also returns a replacement count; never pass it as a native UI color.
+  local preview = tostring(template or ''):gsub('{item}', function() return substitution end)
+  return preview
 end
 function A:RefreshDefaultLibrary()
   if not self.libraryContent then return end
@@ -444,6 +446,7 @@ function A:RefreshDefaultLibrary()
   local field=self:PhraseField('en',self.activeChannel or 'me',self.activeTab=='last')
   if type(cfg.libraryLegacyEmpty)=='table' and cfg.libraryLegacyEmpty[field] then
     local row=nextRow();row.checkbox:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
+    row.display:SetTextColor(.78,.81,.82)
     row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary() end)
   end
   self.libraryContent:SetHeight(math.max(y,100))
