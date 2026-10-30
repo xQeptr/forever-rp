@@ -6,22 +6,25 @@ on:
 
 jobs:
   package:
+    strategy:
+      matrix:
+        lua: ["5.1", "5.4"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Lua for syntax and simulation tests
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua${{ matrix.lua }}
       - name: Validate Lua modules
-        run: find ForeverRP -name '*.lua' -print0 | xargs -0 -n1 luac5.4 -p
+        run: find ForeverRP -name '*.lua' -print0 | xargs -0 -n1 luac${{ matrix.lua }} -p
       - name: Run simulated UI and event tests
         run: |
-          lua5.4 tests/mock_ui.lua
-          lua5.4 tests/mock_events.lua
-          lua5.4 tests/mock_scanner.lua
-          lua5.4 tests/mock_library.lua
+          lua${{ matrix.lua }} tests/mock_ui.lua
+          lua${{ matrix.lua }} tests/mock_events.lua
+          lua${{ matrix.lua }} tests/mock_scanner.lua
+          lua${{ matrix.lua }} tests/mock_library.lua
       - name: Package Retail and Forever
         run: python3 tools/package.py --version 0.9.17
       - uses: actions/upload-artifact@v4
         with:
-          name: ForeverRP-test-builds
+          name: ForeverRP-test-builds-lua${{ matrix.lua }}
           path: dist/*.zip

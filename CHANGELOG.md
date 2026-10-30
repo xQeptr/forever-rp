@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Move custom phrases into an independent editor; show wrapping defaults without headers, with active checkboxes and whole-phrase race colors.
+- Preserve invalid editor drafts across reload; flush valid edits on logout and keep per-pool contexts explicit.
 - Fix library-hover tooltip crashes caused by passing the substitution count as a native color argument; reset reused opt-out row colors.
 - Replace manual sample imports with shared read-only default pools and category-wide disable flags.
 - Automatically select matching racial English pools, including Gnome; unknown or conflicting race data uses neutral defaults.

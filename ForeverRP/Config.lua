@@ -296,6 +296,28 @@ end
 
 -- The existing saved fields are kept exactly as in v0.9.12:
 --  lines, sayLines, outMeLines, outSayLines; no data migration required.
+-- One draft is enough: invalid input blocks every context change.
+-- Persist it immediately so /reload cannot silently discard an invalid edit.
+function A:RememberEditorDraft()
+  if self.selectedID and self.editorDirty then
+    self.db.editorDraft={item=self.selectedID,tab=self.activeTab,channel=self.activeChannel,text=self.textEditor:GetText()}
+  end
+end
+function A:ShowCustomEditor()
+  local draft=self.db.editorDraft
+  if type(draft)=='table' and type(draft.item)=='number' and self.db.items[draft.item]
+    and type(draft.text)=='string' and (draft.tab=='regular' or draft.tab=='last')
+    and (draft.channel=='me' or draft.channel=='say') and not self.editorDirty then
+    self:SelectItem(draft.item)
+    self.activeTab,self.activeChannel=draft.tab,draft.channel
+    self:ReloadEditor()
+    self.loadingEditor=true;self.textEditor:SetText(draft.text);self.loadingEditor=false
+    self.editorDirty=true;self:RefreshDetails()
+    self.editorStatus:SetText('Recovered unsaved draft. Correct errors to save, or close to discard explicitly.')
+  end
+  if not self.selectedID then return end
+  self.customEditor:Show()
+end
 function A:SaveEditor()
   if not self.selectedID or not self.textEditor or not self.editorDirty then return true end
   local cfg = self.db.items[self.selectedID]
@@ -310,6 +332,8 @@ function A:SaveEditor()
   local stock = self.activeTab == 'last'
   self:SetCustomPhrases(self.selectedID, 'en', self.activeChannel or 'me', lines, stock)
   self.editorDirty = false
+  self.db.editorDraft=nil
+  self:RefreshTextInfo()
   self.shuffles = {}
   self.editorStatus:SetText('|cff92db9eSaved ' .. #lines .. ' /' .. (self.activeChannel or 'me') ..
     ' ' .. (stock and 'last-item' or 'regular') .. ' phrases.|r')
@@ -358,7 +382,8 @@ function A:RefreshTextInfo()
   if not self.textCount then return end
   local id=self.selectedID
   if not id then self.textCount:SetText('');return end
-  self.textCount:SetText('Available - Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
+  local u,r,c=self:GetLibrarySources(id,'en',self.activeChannel or 'me',self.activeTab=='last')
+  self.textCount:SetText('Current: '..(#u+#r)..' active defaults / '..#c..' custom.  Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
     #self:GetResolvedPhrases(id,'en','say')..' /say | Last: '..
     #self:GetResolvedPhrases(id,'en','me',true)..' /me, '..#self:GetResolvedPhrases(id,'en','say',true)..' /say')
 end
@@ -386,9 +411,8 @@ function A:RefreshDefaultLibrary()
   self.libraryRows=self.libraryRows or {}
   if not self.selectedID then return end
   local u,r=self:GetLibraryEntries(self.selectedID,'en',self.activeChannel or 'me',self.activeTab=='last')
-  local race,info=self:GetPlayerRace()
+  local _,info=self:GetPlayerRace()
   local y,n=0,0
-  self.libraryCollapsed=self.libraryCollapsed or {}
   local function nextRow()
     n=n+1
     local row=A.libraryRows[n]
@@ -401,7 +425,7 @@ function A:RefreshDefaultLibrary()
       row.checkbox:SetSize(25,25);row.checkbox:SetPoint('LEFT',row,'LEFT',0,0)
       row.checkbox:SetScript('OnClick',function(cb)
         if row.entry then
-          A:SetDefaultDisabled(row.entry.id,cb:GetChecked())
+          A:SetDefaultDisabled(row.entry.id,not cb:GetChecked())
           A:RefreshDefaultLibrary(); A:RefreshTextInfo()
         end
       end)
@@ -419,27 +443,19 @@ function A:RefreshDefaultLibrary()
     y=y+30;row:Show();row.entry=nil
     return row
   end
-  for _,section in ipairs({{key='universal',name='General templates',entries=u},
-      {key='race',name=info and (info.name..' templates') or 'Race unknown - general templates only',entries=r}}) do
-    local row=nextRow()
-    row.checkbox:Hide()
-    row.display:SetText((self.libraryCollapsed[section.key] and '+ ' or '- ')..section.name..' ('..#section.entries..')')
-    local color=section.key=='race' and info and info.color or {.83,.75,.59}
-    row.display:SetTextColor(color[1],color[2],color[3])
-    local sectionKey=section.key
-    row:SetScript('OnClick',function()
-      A.libraryCollapsed[sectionKey]=not A.libraryCollapsed[sectionKey];A:RefreshDefaultLibrary()
-    end)
-    if not self.libraryCollapsed[section.key] then
-      for _,entry in ipairs(section.entries) do
-        local item=nextRow();item.entry=entry
-        item.checkbox:Show();item.checkbox:SetChecked(self:IsDefaultDisabled(entry.id))
-        item.display:SetTextColor(.78,.81,.82)
-        fitName(item.display,entry.text,575)
-        item:SetScript('OnClick',function()
-          A:SetDefaultDisabled(entry.id,not A:IsDefaultDisabled(entry.id));A:RefreshDefaultLibrary();A:RefreshTextInfo()
-        end)
-      end
+  for index,entries in ipairs({u,r}) do
+    for _,entry in ipairs(entries) do
+      local item=nextRow();item.entry=entry
+      item.checkbox:Show();item.checkbox:SetChecked(not self:IsDefaultDisabled(entry.id))
+      local color=index==2 and info and info.color or {1,1,1}
+      item.display:SetTextColor(color[1],color[2],color[3])
+      item.display:SetText(entry.text)
+      if item.display.SetWordWrap then item.display:SetWordWrap(true) end
+      local height=math.max(30,(item.display:GetStringHeight() or 16)+14)
+      item:SetHeight(height);y=y+height-30
+      item:SetScript('OnClick',function()
+        A:SetDefaultDisabled(entry.id,not A:IsDefaultDisabled(entry.id));A:RefreshDefaultLibrary();A:RefreshTextInfo()
+      end)
     end
   end
   local cfg=self.db.items[self.selectedID]
@@ -447,7 +463,8 @@ function A:RefreshDefaultLibrary()
   if type(cfg.libraryLegacyEmpty)=='table' and cfg.libraryLegacyEmpty[field] then
     local row=nextRow();row.checkbox:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
     row.display:SetTextColor(.78,.81,.82)
-    row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary() end)
+    row:SetHeight(44);y=y+14
+    row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary();A:RefreshTextInfo() end)
   end
   self.libraryContent:SetHeight(math.max(y,100))
   if self.libraryScroll.UpdateScrollChildRect then self.libraryScroll:UpdateScrollChildRect() end
@@ -479,11 +496,17 @@ function A:RefreshDetails()
   end
   for tab, b in pairs(self.tabButtons or {}) do
     b:SetSelected(tab == self.activeTab)
+    if self.customTabButtons then self.customTabButtons[tab]:SetSelected(tab==self.activeTab) end
   end
   for channel, b in pairs(self.channelButtons or {}) do
     b:SetSelected(channel == self.activeChannel)
+    if self.customChannelButtons then self.customChannelButtons[channel]:SetSelected(channel==self.activeChannel) end
   end
   self.editorPane:Show()
+  if self.customEditorTitle then
+    self.customEditorTitle:SetText((cfg and nameFor(self.selectedID,cfg,self.inventory[self.selectedID]) or 'Select an item')..
+      ' - '..(self.activeTab=='last' and 'Last Item' or 'Regular')..' /'..(self.activeChannel or 'me'))
+  end
   self:RefreshDefaultLibrary()
   self:RefreshTextInfo()
 end
@@ -699,10 +722,28 @@ function A:BuildConfig()
   editorPane:SetPoint('TOPLEFT',f,'TOPLEFT',343,-302)
   editorPane:SetSize(664,342)
   self.editorPane=editorPane
-  local editorBorder=CreateFrame('Frame',nil,editorPane)
-  editorBorder:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,0)
-  editorBorder:SetSize(662,120)
-  surface(editorBorder,0,0,662,120,{.105,.17,.215,.90},{.42,.39,.29,.52})
+  self.editCustomButton=button(editorPane,'Edit custom phrases',190,27,0,-4,function() A:ShowCustomEditor() end)
+  local custom=CreateFrame('Frame','ForeverRPCustomEditor',UIParent)
+  custom:SetSize(710,530);custom:SetPoint('CENTER');custom:SetFrameStrata('FULLSCREEN_DIALOG')
+  custom:SetMovable(true);custom:EnableMouse(true);custom:RegisterForDrag('LeftButton')
+  custom:SetScript('OnDragStart',custom.StartMoving);custom:SetScript('OnDragStop',custom.StopMovingOrSizing)
+  custom:SetClampedToScreen(true)
+  surface(custom,0,0,710,530,{.105,.17,.215,1},{.42,.39,.29,1})
+  self.customEditor=custom
+  self.customEditorTitle=label(custom,'Custom phrases',18,-18,'GameFontNormal')
+  self.customEditorTitle:SetWidth(630)
+  button(custom,'X',26,25,672,-8,function() custom:Hide() end)
+  if type(UISpecialFrames)=='table' then UISpecialFrames[#UISpecialFrames+1]='ForeverRPCustomEditor' end
+  self.customTabButtons={}
+  self.customChannelButtons={}
+  self.customTabButtons.regular=navTab(custom,'Regular RP',18,-48,160,30,function() A:SwitchTab('regular') end)
+  self.customTabButtons.last=navTab(custom,'Last Item RP',180,-48,160,30,function() A:SwitchTab('last') end)
+  self.customChannelButtons.me=navTab(custom,'/me',365,-48,100,30,function() A:SwitchChannel('me') end,true)
+  self.customChannelButtons.say=navTab(custom,'/say',467,-48,100,30,function() A:SwitchChannel('say') end,true)
+  local editorBorder=CreateFrame('Frame',nil,custom)
+  editorBorder:SetPoint('TOPLEFT',custom,'TOPLEFT',18,-90)
+  editorBorder:SetSize(662,280)
+  surface(editorBorder,0,0,662,280,{.105,.17,.215,.90},{.42,.39,.29,.52})
   local editorScroll=CreateFrame('ScrollFrame',nil,editorBorder,'UIPanelScrollFrameTemplate')
   editorScroll:SetPoint('TOPLEFT',editorBorder,'TOPLEFT',11,-10)
   editorScroll:SetPoint('BOTTOMRIGHT',editorBorder,'BOTTOMRIGHT',-29,9)
@@ -728,7 +769,7 @@ function A:BuildConfig()
     local function followCursor()
       if A.loadingEditor or A.textEditor~=e or A.selectedID~=activeItem
         or A.activeTab~=activeTab or A.activeChannel~=activeChannel
-        or not editorPane:IsShown() then return end
+        or not custom:IsShown() then return end
       local viewport=editorScroll:GetHeight() or 0
       if viewport<=0 then return end
       local top=math.max(0,-y)
@@ -751,6 +792,7 @@ function A:BuildConfig()
     if e.GetStringHeight then e:SetHeight(math.max(96,(e:GetStringHeight() or 0)+30)) end
     if A.loadingEditor then return end
     A.editorDirty=true
+    A:RememberEditorDraft()
     A.autoSaveRevision=(A.autoSaveRevision or 0)+1
     local revision=A.autoSaveRevision
     local item,tab,channel=A.selectedID,A.activeTab,A.activeChannel
@@ -769,7 +811,7 @@ function A:BuildConfig()
   editorScroll:SetScrollChild(edit)
   self.editorScroll=editorScroll
   self.textEditor=edit
-  button(editorPane,'Local Preview',137,27,0,-127,function()
+  button(custom,'Local Preview',137,27,18,-382,function()
     if not A.selectedID then return end
     local currentMeta=A.inventory and A.inventory[A.selectedID]
     local lines,err=A:ParseLines(A.textEditor:GetText(),currentMeta and currentMeta.link)
@@ -779,32 +821,32 @@ function A:BuildConfig()
     local phrase=lines[math.random(#lines)]:gsub('{item}',function()return link end)
     A:Say('LOCAL /'..A.activeChannel..' preview ONLY: '..phrase)
   end)
-  label(editorPane,'Auto-save after 0.7s. Enter = new phrase; {item} optional.',152,-133):SetWidth(506)
+  label(custom,'Auto-save after 0.7s. Enter = new phrase; {item} optional.',170,-389):SetWidth(506)
 
-  label(editorPane,'Own texts above. Defaults below: checked = disabled for this category.',0,-163):SetWidth(650)
-  button(editorPane,'Edit preserved matches as own texts',270,23,0,-184,function()
+  self.recoverCustomButton=button(custom,'Edit preserved matches as own texts',270,23,18,-421,function()
     if not A.selectedID or not A:SaveEditor() then return end
     local cfg=A.db.items[A.selectedID]
     local raw=A:GetPhrases(cfg,'en',A.activeChannel or 'me',A.activeTab=='last')
     A.loadingEditor=true;A.textEditor:SetText(formatLines(raw));A.loadingEditor=false
     A.editorDirty=true
+    A:RememberEditorDraft()
     A.editorStatus:SetText('Preserved matches shown. Saving explicitly claims these as own texts, independent of default disables.')
   end)
   local libraryScroll=CreateFrame('ScrollFrame',nil,editorPane,'UIPanelScrollFrameTemplate')
-  libraryScroll:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,-213)
-  libraryScroll:SetSize(635,125)
-  local content=CreateFrame('Frame',nil,libraryScroll);content:SetSize(616,125)
+  libraryScroll:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,-40)
+  libraryScroll:SetSize(635,300)
+  local content=CreateFrame('Frame',nil,libraryScroll);content:SetSize(616,300)
   libraryScroll:SetScrollChild(content)
   self.libraryContent,self.libraryScroll=content,libraryScroll
 
-  self.editorStatus=label(f,'Select an item. Nothing is automatically emitted by configuration changes.',345,-653)
+  self.editorStatus=label(custom,'Valid edits save automatically. Invalid drafts are preserved on reload.',18,-465)
   self.editorStatus:SetWidth(652)
   self.editorStatus:SetJustifyH('LEFT')
   label(f,'/say may be restricted by the client; /me remains the preferred RP output.',345,-685):SetWidth(650)
   label(f,'Consumption: successful spell + bag decrease. Last item replaces regular RP.',345,-709):SetWidth(650)
   -- An invalid unsaved draft must never vanish silently on close or ESC.
   -- Show the native WoW confirmation; users explicitly choose discard vs edit.
-  f:SetScript('OnHide',function()
+  custom:SetScript('OnHide',function()
     if not A.selectedID or A:SaveEditor() then return end
     if type(StaticPopupDialogs)=='table' and type(StaticPopup_Show)=='function' then
       if not StaticPopupDialogs.FOREVERRP_DISCARD_INVALID then
@@ -814,19 +856,22 @@ function A:BuildConfig()
           button2='Keep editing',
           OnAccept=function()
             A.editorDirty=false
+            A.db.editorDraft=nil
             A:ReloadEditor()
           end,
-          OnCancel=function() f:Show() end,
+          OnCancel=function() custom:Show() end,
           timeout=0, whileDead=true, hideOnEscape=false, preferredIndex=3,
         }
       end
       StaticPopup_Show('FOREVERRP_DISCARD_INVALID')
     else
       -- Safer fallback on clients without StaticPopup: leave the draft open.
-      f:Show()
+      custom:Show()
     end
   end)
+  custom:Hide()
   self:RefreshConfig()
+  if type(self.db.editorDraft)=='table' then self:ShowCustomEditor() end
   return f
 end
 

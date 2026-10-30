@@ -33,7 +33,7 @@ mt.__index=function(o,k)
  return function(self,...) return nil end
 end
 function CreateFrame(kind,name,parent,template)
- local f=setmetatable({_name=name,_kind=kind,_template=template},mt)
+ local f=setmetatable({_name=name,_kind=kind,_template=template,_parent=parent},mt)
  if template=='BasicFrameTemplateWithInset' then f._title=setmetatable({},mt) end
  return f
 end
@@ -72,6 +72,11 @@ assert(A.tabButtons.regular.SetSelected and A.channelButtons.me.SetSelected,'rea
 assert(A.listScroll~=nil,'list panel built')
 assert(A.configFrame and A.listScroll and A.libraryContent and not A.tabButtons.templates,'building inline default UI')
 A:SelectItem(118)
+assert(not A.customEditor:IsShown(),'custom editor starts visible')
+assert(A.customEditor._parent==UIParent and A.editorScroll._parent._parent==A.customEditor,'editor is not independent')
+A.editCustomButton._script_OnClick()
+assert(A.customEditor:IsShown(),'editor button did not open window')
+assert(A.libraryScroll._height==300,'defaults did not gain space')
 -- Hover the actual library row: gsub's count must never reach native SetText.
 local hoverRow
 for _,r in ipairs(A.libraryRows) do if type(r.entry)=='table' then hoverRow=r;break end end
@@ -104,7 +109,7 @@ assert(A.libraryRows and #A.libraryRows>2,'default library rows missing')
 local checkbox
 for _,r in ipairs(A.libraryRows) do if r.entry then checkbox=r.checkbox;break end end
 assert(checkbox,'missing default disable checkbox')
-checkbox:SetChecked(true);checkbox._script_OnClick(checkbox)
+checkbox:SetChecked(false);checkbox._script_OnClick(checkbox)
 assert(next(A.db.defaultDisabled),'default disable not saved')
 assert(A.db.items[118].outSayLines==nil,'default materialized into item')
 A:SwitchChannel('me')
@@ -179,11 +184,11 @@ StaticPopupDialogs={};local popupName
 StaticPopup_Show=function(name) popupName=name end
 A.textEditor:SetText(('a'):rep(201));A.textEditor._script_OnTextChanged(A.textEditor);deferred()
 local old=A.db.items[118].lines[1]
-A.configFrame._script_OnHide()
+A.customEditor._script_OnHide()
 assert(popupName=='FOREVERRP_DISCARD_INVALID','missing invalid close confirmation')
 assert(A.db.items[118].lines[1]==old,'invalid draft overwrote prior valid saved phrase')
 StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnCancel()
-assert(A.configFrame:IsShown(),'keep editing should reopen config')
+assert(A.customEditor:IsShown(),'keep editing should reopen editor')
 StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnAccept()
 assert(A.editorDirty==false and A.textEditor:GetText()==old,'discard should restore saved phrase')
 -- Mode changes seed only missing Last Item pools, without replacing drafts,
@@ -207,15 +212,10 @@ print('PASS v0.9.17 mock WoW UI: optional placeholder, exact newlines, validatio
 -- Default sections follow tab/channel/category changes and preserve bad drafts.
 A:SelectItem(118);A:SwitchTab('regular');A:SwitchChannel('me')
 local cfg=A.db.items[118];cfg.autoCategory='potion';A:RefreshDetails()
-local header=A.libraryRows[1]
-header._script_OnClick(header)
-assert(A.libraryCollapsed.universal==true,'general section did not collapse')
-header._script_OnClick(header)
-assert(A.libraryCollapsed.universal==false,'general section did not expand')
 local row
 for _,r in ipairs(A.libraryRows)do if type(r.entry)=='table'then row=r;break end end
 assert(row and row.entry.category=='potion' and not row.entry.stock and row.entry.channel=='me')
-local disabled=row.entry.id;row.checkbox:SetChecked(true);row.checkbox._script_OnClick(row.checkbox)
+local disabled=row.entry.id;row.checkbox:SetChecked(false);row.checkbox._script_OnClick(row.checkbox)
 A.db.items[1179].autoCategory='potion';A:SelectItem(1179)
 assert(A:IsDefaultDisabled(disabled),'disable did not survive item switch')
 A:SwitchTab('last');A:SwitchChannel('say')
@@ -233,15 +233,13 @@ for _,tab in ipairs({'regular','last'}) do
   for _,r in ipairs(A.libraryRows) do
    if r:IsShown() and type(r.entry)=='table' then
     r._script_OnEnter(r);r._script_OnLeave(r)
-    assert(r.display._color[1]==.78,'entry inherited race color')
-   elseif r:IsShown() and r.display:GetText():find('Gnome templates',1,true) then
-    assert(r.display._color[1]==.22 and r.display._color[2]==.69,'Gnome header color changed')
+    local expected=(r.entry.source~='universal') and .22 or 1
+    assert(r.display._color[1]==expected,'phrase color does not match source')
    end
   end
  end
 end
 A.db.items[37863].libraryLegacyEmpty={outSayLines=true}
-A.libraryCollapsed.universal=true;A.libraryCollapsed.race=true
 A.libraryRows[3].display:SetTextColor(.22,.69,.68)
 A:RefreshDefaultLibrary()
 local foundOptOut=false
@@ -257,4 +255,79 @@ local tab,channel,item=A.activeTab,A.activeChannel,A.selectedID
 A:SwitchTab('regular');A:SwitchChannel('me');A:SelectItem(118)
 assert(A.activeTab==tab and A.activeChannel==channel and A.selectedID==item,'invalid draft lost on library switch')
 assert(A.textEditor:GetText()==string.rep('x',201))
-io.write('PASS inline defaults UI: collapse, category sharing, pool switches, invalid drafts\n')
+io.write('PASS defaults UI: category sharing, pool switches, invalid drafts\n')
+
+-- All visible rows are phrases, except the explicit legacy opt-out action.
+A.editorDirty=false;A.db.editorDraft=nil;A:ReloadEditor()
+A.db.items[37863].libraryLegacyEmpty=nil
+A.db.defaultDisabled={};A:RefreshDefaultLibrary()
+for _,r in ipairs(A.libraryRows) do
+ if r:IsShown() then
+  assert(type(r.entry)=='table','unexpected heading row')
+  assert(r.checkbox:GetChecked()==true,'new default not checked')
+ end
+end
+local r=A.libraryRows[1];local id=r.entry.id
+r.checkbox:SetChecked(false);r.checkbox._script_OnClick(r.checkbox)
+assert(A:IsDefaultDisabled(id) and not r.checkbox:GetChecked(),'unchecked must disable')
+r.checkbox:SetChecked(true);r.checkbox._script_OnClick(r.checkbox)
+assert(not A:IsDefaultDisabled(id) and r.checkbox:GetChecked(),'checked must enable')
+-- Race color lives on the complete phrase, and resets on reused rows.
+for _,race in ipairs({'Scourge','Orc','Dwarf','Gnome'}) do
+ UnitRace=function() return race,race end
+ A:RefreshDefaultLibrary()
+ local _,info=A:GetPlayerRace();local found=false
+ for _,r in ipairs(A.libraryRows) do
+  if r:IsShown() then
+   local color=(r.entry.source~='universal') and info.color or {1,1,1}
+   for n=1,3 do assert(r.display._color[n]==color[n],'wrong phrase race color') end
+   if (r.entry.source~='universal') then found=true end
+  end
+ end
+ assert(found,'missing racial phrase')
+end
+-- A reload can recover an invalid draft, including its exact item/pool.
+A.textEditor:SetText(string.rep('q',201));A.textEditor._script_OnTextChanged(A.textEditor)
+local pending=deferred
+assert(A.db.editorDraft.text==string.rep('q',201),'draft not persisted before debounce')
+local draft=A.db.editorDraft
+A.editorDirty=false;A:ReloadEditor();A:ShowCustomEditor()
+assert(A.editorDirty and A.textEditor:GetText()==draft.text,'reload recovery lost draft')
+assert(not A:SaveEditor(),'invalid recovered draft saved')
+StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnAccept()
+pending()
+assert(not A.editorDirty and A.db.editorDraft==nil,'stale timer restored discarded draft')
+print('PASS separate editor, active checkboxes, header-free colored defaults, persisted invalid draft')
+
+-- Pending callbacks cannot save into another item or pool after switching.
+A:SelectItem(118);A:SwitchTab('regular');A:SwitchChannel('me')
+A.textEditor:SetText('timer lifetime check');A.textEditor._script_OnTextChanged(A.textEditor)
+local stale=deferred
+A:SwitchChannel('say')
+local sayBefore=A.textEditor:GetText()
+stale()
+assert(A.textEditor:GetText()==sayBefore and A.db.items[118].lines[1]=='timer lifetime check')
+assert(A.customChannelButtons.say._selected and not A.customChannelButtons.me._selected)
+A:SwitchTab('last')
+assert(A.customTabButtons.last._selected and not A.customTabButtons.regular._selected)
+-- Exercise real logout dispatch with the real editor, before debounce runs.
+local savedDB,savedInventory=A.db,A.inventory
+SlashCmdList={}
+dofile(root..'Core.lua')
+A.db,A.inventory=savedDB,savedInventory
+A:SwitchTab('regular');A:SwitchChannel('me')
+A.textEditor:SetText('saved immediately on logout');A.textEditor._script_OnTextChanged(A.textEditor)
+A.eventFrame._script_OnEvent(A.eventFrame,'PLAYER_LOGOUT')
+assert(A.db.items[118].lines[1]=='saved immediately on logout' and A.db.editorDraft==nil)
+A:SwitchTab('last');A:SwitchChannel('say')
+local prior=A.db.items[118].outSayLines
+A.textEditor:SetText(string.rep('z',201));A.textEditor._script_OnTextChanged(A.textEditor)
+A.eventFrame._script_OnEvent(A.eventFrame,'PLAYER_LOGOUT')
+assert(A.db.items[118].outSayLines==prior and A.db.editorDraft.text==string.rep('z',201))
+-- Simulate UI recreation after reload, starting without a selected item.
+A.selectedID=nil;A.editorDirty=false
+A:BuildConfig()
+assert(A.customEditor:IsShown() and A.selectedID==118 and A.activeTab=='last' and A.activeChannel=='say')
+assert(A.textEditor:GetText()==string.rep('z',201) and A.editorDirty,'build lost reload draft')
+assert(A.customTabButtons.last._selected and A.customChannelButtons.say._selected)
+print('PASS actual logout flush and BuildConfig reload recovery')

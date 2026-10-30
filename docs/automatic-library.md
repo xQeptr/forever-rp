@@ -19,19 +19,35 @@ The Blizzard API definition is mirrored in
 [UnitDocumentation.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua).
 
 Authored English pools cover Forsaken (`Scourge`), Dwarf, Gnome, Orc, Troll, Tauren,
-Human and Night Elf. Gnome uses teal; the section heading alone carries the subtle
-race color. Each authored race/category/pool has two new entries. Hearthstone has
+Human and Night Elf. Gnome uses teal; each complete racial phrase carries its subtle
+race color; general phrases are white. Each authored race/category/pool has two new entries. Hearthstone has
 no Last Item defaults. Old explicitly undead/Lordaeron flavor is restricted to
 Scourge, including dormant German templates. Healthstones describe breaking fel
 stones; no charge support or change to consumption confirmation is introduced.
 
 ## Selection and controls
 
-Both existing RP tabs and /me-/say subtabs remain. The editor holds per-item custom
-texts; two collapsible sections underneath list general and recognized racial
-defaults. Checked means **disabled**, shared across every item in that category and
-pool via `ForeverRPDB.defaultDisabled[stableID]`. The full phrase is available on
-hover. No library import/selection/materialization actions remain.
+Both RP tabs and /me-/say subtabs remain. The main text area contains only
+read-only default phrases in one scrollable list, without section headers or
+collapsible groups. Every default starts checked (active); unchecking disables it
+across every item in that category/pool via `ForeverRPDB.defaultDisabled[stableID]`.
+Existing opt-outs remain unchecked. General phrases are white and racial phrases
+use their race color. Phrases wrap rather than being truncated; hover also shows
+an item-expanded preview. Counts reflect the effective current pool.
+
+**Edit custom phrases** opens a separate movable window with its own Regular/Last
+Item and /me-/say tabs, context title, multiline custom editor, local preview and
+**Edit preserved matches as own texts** recovery. It never sends chat. Valid edits
+save after 0.7 seconds, on blur, close, context switch and PLAYER_LOGOUT. Invalid
+input blocks item/tab/channel switches; closing offers explicit discard or keep
+editing. Clients without confirmation support keep the editor open. The main
+window and custom editor have independent visibility.
+
+The additive `ForeverRPDB.editorDraft` stores the current item, tab, channel and
+raw text immediately on editing. Invalid drafts survive reload and are restored
+when configuration is next built, before another item can overwrite them. Saving
+or explicitly discarding clears the draft; existing phrase arrays are changed
+only after validation. Legacy data and selection weights are unchanged.
 
 With both default sources available, the default source draw is 70% general and
 30% matching race. With only one source, that source is used. Each custom phrase

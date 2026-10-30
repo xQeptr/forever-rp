@@ -182,6 +182,7 @@ end
 
 A.eventFrame=CreateFrame('Frame')
 A.eventFrame:RegisterEvent('PLAYER_LOGIN')
+A.eventFrame:RegisterEvent('PLAYER_LOGOUT')
 A.eventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
 A.eventFrame:RegisterEvent('BAG_UPDATE_DELAYED')
 A.eventFrame:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED','player')
@@ -192,6 +193,8 @@ A.eventFrame:RegisterEvent('CHAT_MSG_EMOTE')
 A.eventFrame:RegisterEvent('CHAT_MSG_SAY')
 A.eventFrame:SetScript('OnEvent',function(_,event,...)
   if event=='PLAYER_LOGIN' then A:Init()
+  elseif event=='PLAYER_LOGOUT' then
+    if A.db and A.SaveEditor then A:SaveEditor() end
   elseif event=='PLAYER_ENTERING_WORLD' then
     if A.db then
       A:ResetInventory()
