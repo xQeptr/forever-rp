@@ -1,7 +1,7 @@
--- Forever RP v0.9.2b | Dual-client codebase. No protected actions, no combat automation.
+-- Forever RP v0.9.20-beta | Dual-client codebase. No protected actions, no combat automation.
 ForeverRP = ForeverRP or {}
 local A = ForeverRP
-A.version = '0.9.17-retail-beta'
+A.version = '0.9.20-beta-retail-beta'
 A.db = nil
 A.inventory = {}
 A.spellToItems = {}

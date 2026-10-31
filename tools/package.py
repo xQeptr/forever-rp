@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,re,zipfile
 
 P=argparse.ArgumentParser()
-P.add_argument('--version',default='0.9.17',help='Version, optionally with a leading v')
+P.add_argument('--version',default='0.9.20-beta',help='Version, optionally with a leading v')
 args=P.parse_args()
 version=args.version.removeprefix('v')
 if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9.]+)?',version):

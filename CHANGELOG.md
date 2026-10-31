@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## v0.9.20-beta (pre-release)
 - Fill the custom writing viewport with the native EditBox; focus blank clicks at text end while preserving native selection and scrolling.
 - Use compact ON/OFF controls for default phrases, preserving category opt-outs and restoring source colors on reused rows.
 - Add 188 original category/race phrases, with extra elixir variety; freeze all 1,968 historical entries and keep coincidentally identical existing custom text independent.
