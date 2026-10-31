@@ -1,3 +1,15 @@
+Forever RP v0.9.20-beta — pre-release test build
+
+- New automatic general/race-specific RP phrase library with 70/30 weighting,
+  category-wide ON/OFF toggles and separate custom-text editor.
+- Improved editor click focus and consistent ON/OFF controls.
+- 188 additional editorial RP lines, for a total of 2,156 defaults.
+- Retail beta and WoW Forever preview builds use the same Lua source.
+- Existing per-character saved settings and custom phrases should remain intact.
+  Back up SavedVariables before testing.
+- Healthstone charge-only use, real Forever APIs and external chat delivery still
+  need client verification. This is NOT a stable release.
+
 Forever RP v0.9.15 — Eternal Ink quality-of-life polish
 
 - Config text editor automatically saves valid phrases after 0.7 s without typing,

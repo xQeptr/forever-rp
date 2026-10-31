@@ -7,7 +7,7 @@ Last Item RP, automatic category/race defaults and per-character custom texts.
 
 ## Status
 
-Current development build: **0.9.17**, Retail **beta**, WoW Forever **preview**.
+Current pre-release test build: **0.9.20-beta**, Retail **beta**, WoW Forever **preview**. This is not a stable release; real-client compatibility and external chat delivery remain unverified.
 Healthstone charge-only uses (unchanged stack count) are not confirmed: no
 charge-count API semantics have been verified on either target client. Do not
 assume every Healthstone use is announced or that Last Item means last charge.
@@ -22,9 +22,9 @@ messages were delivered to another player unless you have tested this.
 
 ## Automatic library feature
 
-The planned 0.9.18 feature uses shared read-only defaults, per-category ON/OFF
-controls and automatic character-race selection. The source version stays 0.9.17
-until an explicit release change. See [library behavior and migration](docs/automatic-library.md),
+The 0.9.20-beta feature provides shared read-only defaults, per-category ON/OFF
+controls, automatic character-race selection, a separate custom-text editor and
+additional Warcraft-themed RP phrases. Existing player data is preserved. See [library behavior and migration](docs/automatic-library.md),
 including preserved legacy strings, explicit custom ownership and empty-pool opt-outs.
 
 ## Installing
@@ -44,12 +44,13 @@ built from the same source; the build script changes **only** the TOC interface
 and version metadata for each flavor.
 
 ```shell
-python3 tools/package.py --version 0.9.17
+python3 tools/package.py --version 0.9.20-beta
 ```
 
 Two self-contained installable archives appear in `dist/`. Pull requests and
 pushes run Lua syntax checks, simulated UI/event/scanner/library tests and a package build.
-Publish a GitHub Release tagged `v1.0.0` to attach both flavor ZIPs.
+Publish a GitHub pre-release tagged `v0.9.20-beta` to attach both flavor ZIPs.
+The release workflow runs Lua syntax and all five mock suites before uploading.
 
 ## Roadmap before v1.0
 
