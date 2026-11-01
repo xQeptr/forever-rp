@@ -63,3 +63,6 @@ The release workflow runs Lua syntax and all five mock suites before uploading.
 
 WoW and its names are trademarks of their owners. This project is an unofficial
 fan-made addon, not affiliated with or endorsed by Blizzard Entertainment.
+
+## Skyborne and class pools (upcoming)
+Skyborne's wind-inspired race texts use a silver-blue color; class entries have individual class colors. When available, selection weights among automatic defaults are 50% general, 30% race and 20% class, reweighted proportionally for missing pools. Custom texts remain separate with existing ticket weights. Real Forever class/race APIs require in-game verification.

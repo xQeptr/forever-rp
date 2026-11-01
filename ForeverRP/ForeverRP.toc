@@ -16,6 +16,8 @@ AlcoholSamples.lua
 StockSamples.lua
 DefaultLibrary.lua
 RaceLibrary.lua
+Classes.lua
+IdentityLibrary.lua
 EditorialLibrary.lua
 Library.lua
 Inventory.lua

@@ -88,7 +88,7 @@ local root='ForeverRP/'
 ForeverRP={db={language='en',auto=true,showMinimap=true,defaultScope='group',globalCooldown=30,items={}},inventory={},shuffles={}}
 local A=ForeverRP
 function A:GetSettings(id) return self.db.items[id] end
-for _,file in ipairs({'Categories','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','DefaultLibrary','RaceLibrary','Library','Scopes','Emotes','Config'}) do
+for _,file in ipairs({'Categories','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','DefaultLibrary','RaceLibrary','Classes','IdentityLibrary','Library','Scopes','Emotes','Config'}) do
  dofile(root..file..'.lua')
 end
 A.db.items[118]={name='Minor Healing Potion',enabled=true,lines={'takes a sip of {item}.'},sayLines={'I need {item}.'},outputMode='mixed'}
