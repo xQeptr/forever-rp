@@ -1,6 +1,7 @@
 -- Race selection never uses localized labels or guesses from faction/class.
 local A=ForeverRP
 local races={
+ Skyborne={name='Skyborne',color={.70,.83,1.00},ids={}},
  Human={name='Human',color={.43,.61,.73},ids={[1]=true}},
  Orc={name='Orc',color={.38,.64,.32},ids={[2]=true}},
  Dwarf={name='Dwarf',color={.76,.62,.28},ids={[3]=true}},
@@ -34,11 +35,12 @@ function A:GetPlayerRace()
   if not ok then return nil end
   if type(issecretvalue)=='function' and (issecretvalue(file) or issecretvalue(id)) then return nil end
   if type(file)~='string' then return nil end
+  if file=='Skybourne' or file=='SKYBORNE' or file=='SKYBOURNE' then file='Skyborne' end
   local race=races[file]
   if not race then return nil end
   -- FileString is mandatory. An unknown/custom ID is never mapped by number.
   -- A supplied ID must agree; older APIs with no third result use FileString.
-  if id~=nil and (type(id)~='number' or not race.ids[id]) then return nil end
+  if id~=nil and (type(id)~='number' or (file~='Skyborne' and not race.ids[id])) then return nil end
   return file,race
 end
 A.RaceEntries={}

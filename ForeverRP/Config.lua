@@ -382,8 +382,8 @@ function A:RefreshTextInfo()
   if not self.textCount then return end
   local id=self.selectedID
   if not id then self.textCount:SetText('');return end
-  local u,r,c=self:GetLibrarySources(id,'en',self.activeChannel or 'me',self.activeTab=='last')
-  self.textCount:SetText('Current: '..(#u+#r)..' active defaults / '..#c..' custom.  Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
+  local u,r,k,c=self:GetLibrarySources(id,'en',self.activeChannel or 'me',self.activeTab=='last')
+  self.textCount:SetText('Current: '..(#u+#r+#k)..' active defaults / '..#c..' custom.  Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
     #self:GetResolvedPhrases(id,'en','say')..' /say | Last: '..
     #self:GetResolvedPhrases(id,'en','me',true)..' /me, '..#self:GetResolvedPhrases(id,'en','say',true)..' /say')
 end
@@ -410,7 +410,7 @@ function A:RefreshDefaultLibrary()
   for _,row in ipairs(self.libraryRows or {}) do row:Hide() end
   self.libraryRows=self.libraryRows or {}
   if not self.selectedID then return end
-  local u,r=self:GetLibraryEntries(self.selectedID,'en',self.activeChannel or 'me',self.activeTab=='last')
+  local u,r,k=self:GetLibraryEntries(self.selectedID,'en',self.activeChannel or 'me',self.activeTab=='last')
   local _,info=self:GetPlayerRace()
   local y,n=0,0
   local function nextRow()
@@ -454,13 +454,14 @@ function A:RefreshDefaultLibrary()
     y=y+30;row:Show();row.entry=nil
     return row
   end
-  for index,entries in ipairs({u,r}) do
+  for index,entries in ipairs({u,r,k}) do
     for _,entry in ipairs(entries) do
       local item=nextRow();item.entry=entry
       local enabled=not self:IsDefaultDisabled(entry.id)
       item.status:Show();item.status:SetText(enabled and 'ON' or 'OFF')
       item.statusText:SetTextColor(enabled and .55 or .70,enabled and .85 or .57,enabled and .63 or .48)
-      local color=index==2 and info and info.color or {1,1,1}
+      local class=self:GetPlayerClass()
+      local color=(index==2 and info and info.color) or (index==3 and class and self.Classes[class].color) or {1,1,1}
       if not enabled then color={.49,.52,.54} end
       item.display:SetTextColor(color[1],color[2],color[3])
       item.display:SetText(entry.text)
@@ -583,7 +584,7 @@ function A:BuildConfig()
   icon:SetSize(39,39)
   icon:SetPoint('TOPLEFT',f,'TOPLEFT',21,-36)
   icon:SetTexture('Interface\\AddOns\\ForeverRP\\Media\\ForeverRP_Icon.tga')
-  label(f,'FOREVER RP    |    v0.9.16    |    ETERNAL INK',73,-18,'GameFontNormal')
+  label(f,'FOREVER RP    |    v'..tostring(A.version or 'unknown'),73,-18,'GameFontNormal')
   button(f,'X',26,25,1005,-13,function() f:Hide() end)
   label(f,'GLOBAL SETTINGS',20,-92,'GameFontNormalLarge')
   surface(f,17,-111,293,143,{.16,.21,.27,.88},{.46,.38,.24,.52})

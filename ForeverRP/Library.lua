@@ -31,19 +31,21 @@ function A:InitLibrary()
 end
 function A:GetLibraryEntries(id,lang,ch,stock)
   local category=self:GetCategory(id)
-  if stock and (id==6948 or category=='hearthstone') then return {},{} end
+  if stock and (id==6948 or category=='hearthstone') then return {},{},{} end
   local race=self:GetPlayerRace()
-  local universal,racial={},{}
-  for _,entries in ipairs({self.DefaultEntries,self.RaceEntries}) do
+  local class=self.GetPlayerClass and self:GetPlayerClass() or nil
+  local universal,racial,classes={},{},{}
+  for _,entries in ipairs({self.DefaultEntries,self.RaceEntries,self.ClassEntries or {}}) do
     for _,entry in ipairs(entries) do
       if entry.category==category and entry.language==lang and entry.channel==ch
         and entry.stock==not not stock then
         if entry.source=='universal' then universal[#universal+1]=entry
-        elseif race and entry.source==race then racial[#racial+1]=entry end
+        elseif race and entry.source==race then racial[#racial+1]=entry
+        elseif class and entry.source==class then classes[#classes+1]=entry end
       end
     end
   end
-  return universal,racial
+  return universal,racial,classes
 end
 function A:SetDefaultDisabled(id,disabled)
   if type(self.db.defaultDisabled)~='table' then self.db.defaultDisabled={} end
@@ -55,10 +57,10 @@ function A:IsDefaultDisabled(id)
 end
 function A:GetLibrarySources(id,lang,ch,stock)
   local cfg=self:GetSettings(id)
-  if not cfg then return {},{},{} end
+  if not cfg then return {},{},{},{} end
   local field=self:PhraseField(lang,ch,stock)
-  local u,r=self:GetLibraryEntries(id,lang,ch,stock)
-  local universal,racial,custom={},{},{}
+  local u,r,k=self:GetLibraryEntries(id,lang,ch,stock)
+  local universal,racial,classes,custom={},{},{},{}
   local known={}
   -- Match every historical category, so a category override cannot turn an
   -- imported sample into an ungoverned custom phrase. Saved text is untouched.
@@ -73,37 +75,43 @@ function A:GetLibrarySources(id,lang,ch,stock)
   if not empty then
     for _,e in ipairs(u) do if not self:IsDefaultDisabled(e.id) then universal[#universal+1]=e.text end end
     for _,e in ipairs(r) do if not self:IsDefaultDisabled(e.id) then racial[#racial+1]=e.text end end
+    for _,e in ipairs(k) do if not self:IsDefaultDisabled(e.id) then classes[#classes+1]=e.text end end
   end
   -- Explicit custom ownership can intentionally duplicate a default: emit it
   -- once per pool, still respecting a default's disable flag unless reclaimed.
   local seen={}
   for _,text in ipairs(custom) do seen[text]=true end
-  for _,pool in ipairs({universal,racial}) do
+  for _,pool in ipairs({universal,racial,classes}) do
     for n=#pool,1,-1 do if seen[pool[n]] then table.remove(pool,n) else seen[pool[n]]=true end end
   end
-  return universal,racial,custom
+  return universal,racial,classes,custom
 end
 function A:GetResolvedPhrases(id,lang,ch,stock)
   local result={}
-  local u,r,c=self:GetLibrarySources(id,lang,ch,stock)
-  for _,pool in ipairs({u,r,c}) do for _,line in ipairs(pool) do result[#result+1]=line end end
+  local u,r,k,c=self:GetLibrarySources(id,lang,ch,stock)
+  for _,pool in ipairs({u,r,k,c}) do for _,line in ipairs(pool) do result[#result+1]=line end end
   return result
 end
 function A:GetCustomPhrases(id,lang,ch,stock)
-  local _,_,custom=self:GetLibrarySources(id,lang,ch,stock)
+  local _,_,_,custom=self:GetLibrarySources(id,lang,ch,stock)
   return custom
 end
 function A:PickLibrary(id,lang,ch,stock)
-  local u,r,c=self:GetLibrarySources(id,lang,ch,stock)
-  local defaults=#u+#r
+  local u,r,k,c=self:GetLibrarySources(id,lang,ch,stock)
+  local defaults=#u+#r+#k
   -- Each custom phrase has the same aggregate chance as one default phrase.
   -- Conditional on choosing defaults, preserve the 70:30 source split.
   local pool,source
   if #c>0 and (defaults==0 or math.random(defaults+#c)<=#c) then pool,source=c,'custom'
-  elseif #u>0 and #r>0 then
-    if math.random(100)<=70 then pool,source=u,'universal' else pool,source=r,'race' end
-  elseif #u>0 then pool,source=u,'universal'
-  elseif #r>0 then pool,source=r,'race' end
+  else
+    local choices={{u,'universal',50},{r,'race',30},{k,'class',20}}
+    local total=0
+    for _,v in ipairs(choices) do if #v[1]>0 then total=total+v[3] end end
+    if total>0 then
+      local draw=math.random(total)
+      for _,v in ipairs(choices) do if #v[1]>0 then draw=draw-v[3];if draw<=0 then pool,source=v[1],v[2];break end end end
+    end
+  end
   if not pool then return nil end
   local key=tostring(id)..':'..lang..':'..ch..':'..tostring(not not stock)
   self.libraryPrevious=self.libraryPrevious or {}
@@ -111,7 +119,7 @@ function A:PickLibrary(id,lang,ch,stock)
   -- If users leave only one line in a source, no-repeat takes precedence when
   -- another source is available. Normal shipped racial pools have >=2 lines.
   if #pool==1 and pool[1]==previous then
-    for _,candidate in ipairs({{u,'universal'},{r,'race'},{c,'custom'}}) do
+    for _,candidate in ipairs({{u,'universal'},{r,'race'},{k,'class'},{c,'custom'}}) do
       if #candidate[1]>0 and (#candidate[1]>1 or candidate[1][1]~=previous) then
         pool,source=candidate[1],candidate[2];break
       end

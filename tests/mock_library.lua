@@ -90,7 +90,7 @@ a:Init();assert(a:IsDefaultDisabled(target.id));a:SetDefaultDisabled(target.id,f
 local random=math.random
 local draw=0
 math.random=function(n)
- if n==100 then draw=draw%100+1;return draw end
+ if n==80 then draw=draw%80+1;return draw end
  return n
 end
 local racial={};for _,e in ipairs(r)do racial[e.text]=true end
@@ -100,7 +100,7 @@ for i=1,1000 do
  if racial[text]then raceCount=raceCount+1 end
  assert(text~=previous,'immediate repeat');previous=text
 end
-assert(raceCount==300,'70:30 broken: '..raceCount)
+assert(raceCount==375,'50:30 relative weighting broken: '..raceCount)
 math.random=random
 -- Each source deck uses every phrase before cycling.
 a.shuffles={};a.libraryPrevious={}
@@ -119,7 +119,7 @@ a:SetCustomPhrases(118,'en','me',{},false)
 -- Known legacy matches remain saved but do not masquerade as customs.
 local original={target.text,'My own altered potion text.'}
 a.db.items[118].lines=original
-local _,_,custom=a:GetLibrarySources(118,'en','me',false)
+local _,_,_,custom=a:GetLibrarySources(118,'en','me',false)
 assert(#custom==1 and custom[1]=='My own altered potion text.')
 a:SetDefaultDisabled(target.id,true)
 for _,text in ipairs(a:GetResolvedPhrases(118,'en','me'))do assert(text~=target.text)end
@@ -127,11 +127,12 @@ assert(a.db.items[118].lines==original)
 a:SetCustomPhrases(118,'en','me',{'Replacement custom.'},false)
 assert(a.db.items[118].lines[1]==target.text,'ambiguous legacy original deleted')
 a:SetCustomPhrases(118,'en','me',{target.text,'Replacement custom.'},false)
-local _,_,reclaimed=a:GetLibrarySources(118,'en','me',false)
+local _,_,_,reclaimed=a:GetLibrarySources(118,'en','me',false)
 assert(#reclaimed==2,'explicit identical custom not recoverable')
 -- All disabled: no fallback, send, cooldown, or delayed attempt.
 for _,e in ipairs(a.DefaultEntries)do a:SetDefaultDisabled(e.id,true)end
 for _,e in ipairs(a.RaceEntries)do a:SetDefaultDisabled(e.id,true)end
+for _,e in ipairs(a.ClassEntries)do a:SetDefaultDisabled(e.id,true)end
 a.db.items[858].lines={};a.db.globalLastEmoteAt=123
 assert(#a:GetResolvedPhrases(858,'en','me')==0)
 assert(a:PickLibrary(858,'en','me')==nil)

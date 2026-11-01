@@ -35,5 +35,8 @@ function A:PrintCompat()
   for _,cap in ipairs(info.capabilities) do
     self:Say(cap[1]..': '..(cap[2] and 'OK' or 'MISSING'))
   end
+  local race=self:GetPlayerRace()
+  local class=self.GetPlayerClass and self:GetPlayerClass() or nil
+  self:Say('RP identity: '..tostring(race or 'unknown')..' / '..tostring(class or 'unknown'))
   self:Say('Note: API availability does not prove that automatic /me delivery works. Verify in game.')
 end
