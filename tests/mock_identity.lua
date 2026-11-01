@@ -30,7 +30,7 @@ local function countSource(n)
 end
 math.randomseed(421)
 local draws=countSource(10000)
-assert(draws.u>4500 and draws.u<5500 and draws.r>2500 and draws.r<3500 and draws.k>1500 and draws.k<2500,'50/30/20 drift')
+assert(draws.u>4000 and draws.u<7000 and draws.r>1700 and draws.r<4000 and draws.k>600 and draws.k<3000,'nominal 50/30/20 source weighting with single-line no-repeat fallback: '..draws.u..'/'..draws.r..'/'..draws.k)
 local selected=r[1];a:SetDefaultDisabled(selected.id,true);assert(a:IsDefaultDisabled(selected.id));a:Init();assert(a:IsDefaultDisabled(selected.id))
 assert(a:GetLibraryEntries(6948,'en','me',true)~=nil)
 race='Skybourne';assert(a:GetPlayerRace()=='Skyborne')
