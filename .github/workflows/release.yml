@@ -22,6 +22,7 @@ jobs:
           lua5.4 tests/mock_scanner.lua
           lua5.4 tests/mock_library.lua
           lua5.4 tests/mock_text_quality.lua
+          lua5.4 tests/mock_identity.lua
       - name: Build Retail and Forever packages
         env:
           RELEASE_VERSION: ${{ github.event.release.tag_name }}
