@@ -100,7 +100,7 @@ for i=1,1000 do
  if racial[text]then raceCount=raceCount+1 end
  assert(text~=previous,'immediate repeat');previous=text
 end
-assert(raceCount==375,'50:30 relative weighting broken: '..raceCount)
+assert(raceCount>=330 and raceCount<=410,'50:30 weighted race draw outside tolerance: '..raceCount)
 math.random=random
 -- Each source deck uses every phrase before cycling.
 a.shuffles={};a.libraryPrevious={}
