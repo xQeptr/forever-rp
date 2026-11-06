@@ -11,11 +11,14 @@ for line in io.lines('ForeverRP/ForeverRP.toc') do
  if line:match('%.lua$')then dofile('ForeverRP/'..line)end
 end
 local a=ForeverRP
+a.SendForItem=a.SendLegacyForItem
+a.CanSendInContext=a.CanSendLegacyInContext
+a.GetGroupSpeechChannels=a.GetAvailableChannels
 a.SetupMinimap=function()end
 a.ScanBags=function()return {},{}end
 a.Say=function()end
 local function reset(items)
- ForeverRPDB={items=items or {},defaultScope='always',globalCooldown=0}
+ ForeverRPDB={chatDestination="local",items=items or {},defaultScope='always',globalCooldown=0}
  a:Init();a.shuffles={};a.libraryPrevious={};sent={}
 end
 local file,id='Gnome',7

@@ -38,5 +38,5 @@ function A:PrintCompat()
   local race=self:GetPlayerRace()
   local class=self.GetPlayerClass and self:GetPlayerClass() or nil
   self:Say('RP identity: '..tostring(race or 'unknown')..' / '..tostring(class or 'unknown'))
-  self:Say('Note: API availability does not prove that automatic /me delivery works. Verify in game.')
+  self:Say('Note: API availability does not prove that automatic chat delivery works. Verify in game.')
 end

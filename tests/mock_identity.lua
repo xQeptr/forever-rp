@@ -12,7 +12,7 @@ function UnitRace()return 'Localized',race,777 end
 function UnitClass()return 'Localized',class,2 end
 for line in io.lines('ForeverRP/ForeverRP.toc') do if line:match('%.lua$') then dofile('ForeverRP/'..line) end end
 local a=ForeverRP;a.SetupMinimap=function()end;a.ScanBags=function()return {},{}end;a.Say=function()end
-ForeverRPDB={items={[118]={enabled=true,autoCategory='potion',librarySchema=1}},defaultScope='always',globalCooldown=0}
+ForeverRPDB={chatDestination="local",items={[118]={enabled=true,autoCategory='potion',librarySchema=1}},defaultScope='always',globalCooldown=0}
 a:Init()
 assert(a:GetPlayerRace()=='Skyborne' and a:GetPlayerClass()=='PALADIN')
 local u,r,k=a:GetLibraryEntries(118,'en','me',false)

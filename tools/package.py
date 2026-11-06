@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,re,zipfile
 
 P=argparse.ArgumentParser()
-P.add_argument('--version',default='0.9.20-beta',help='Version, optionally with a leading v')
+P.add_argument('--version',default='0.10.0',help='Version, optionally with a leading v')
 args=P.parse_args()
 version=args.version.removeprefix('v')
 if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9.]+)?',version):
@@ -20,12 +20,12 @@ for name,interface,suffix in variants:
             if not f.is_file(): continue
             rel=f.relative_to(root).as_posix()
             if f.name=='ForeverRP.toc':
-                data=f.read_text()
+                data=f.read_text(encoding='utf-8')
                 data=re.sub(r'(?m)^## Interface: .*$',f'## Interface: {interface}',data)
                 data=re.sub(r'(?m)^## Version: .*$',f'## Version: {version}-{suffix}',data)
                 z.writestr(rel,data)
             elif f.name=='Core.lua':
-                data=f.read_text()
+                data=f.read_text(encoding='utf-8')
                 data=re.sub(r"(?m)^A\.version = '[^']*'",f"A.version = '{version}-{suffix}'",data)
                 z.writestr(rel,data)
             else:

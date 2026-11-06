@@ -1,16 +1,17 @@
--- Forever RP v0.9.20-beta | Dual-client codebase. No protected actions, no combat automation.
+-- Forever RP v0.10.0 | Dual-client codebase. No protected actions, no combat automation.
 ForeverRP = ForeverRP or {}
 local A = ForeverRP
-A.version = '0.9.20-beta-retail-beta'
+A.version = '0.10.0-retail-beta'
 A.db = nil
 A.inventory = {}
 A.spellToItems = {}
 A.last = {result='not_tested', itemID=nil, spellID=nil, echo='none'}
 A.activeConfig = nil
 A.debugEnabled = false
+A.L=A.L or function(_,text,...) return select('#',...)>0 and string.format(text,...) or text end
 
 function A:Say(message)
-  print('|cffb69adaForever RP:|r ' .. tostring(message))
+  print('|cffb69adaForever RP:|r ' .. self:L(tostring(message)))
 end
 function A:Debug(message)
   if self.db and self.db.debug then self:Say('[DEBUG] ' .. tostring(message)) end
@@ -52,8 +53,8 @@ function A:Init()
   -- Shared anti-spam window across all RP types, persisted across /reload.
   if type(self.db.globalCooldown)~='number' then self.db.globalCooldown=30 end
   if type(self.db.globalLastEmoteAt)~='number' then self.db.globalLastEmoteAt=0 end
-  -- English-only UI/output for v0.9.7; old German phrases remain stored but dormant.
-  self.db.language='en'
+  if self.InitLanguage then self:InitLanguage()
+  elseif self.db.language~='de' then self.db.language='en' end
   if self.db.defaultScope==nil then self.db.defaultScope='group' end
   if not self.ValidScopes[self.db.defaultScope] then self.db.defaultScope='group' end
   -- Quarantine malformed values instead of discarding player data.
@@ -91,8 +92,13 @@ function A:Init()
       end
     end
   end
+  normalize(self.db,'manualChat',boolean,false)
+  normalize(self.db,'chatDestination',function(v) return v=='group' or v=='local' end,'group')
+  if self.InitGroupSettings then self:InitGroupSettings() end
+  if self.ArchiveQuestDraft then self:ArchiveQuestDraft() end
   if self.InitLibrary then self:InitLibrary() end
   self:ResetInventory()
+  if self.SetupItemUseTracking then self:SetupItemUseTracking() end
   -- Last Item defaults ON for already enabled consumables, unless previously
   -- explicitly opted out. Hearthstone never needs a last-item notification.
   for id,cfg in pairs(self.db.items) do
@@ -103,17 +109,17 @@ function A:Init()
     end
   end
   if self.SetupMinimap then self:SetupMinimap() end
-  self:Say('v' .. self.version .. ' loaded. /frp config opens the editor. New items are OFF by default.')
+  self:Say(self:L('v%s loaded. /frp config opens the editor. New items are OFF by default.',self.version))
 end
 function A:PrintStatus()
   local l=self.last
-  self:Say('Auto: ' .. (self.db.auto and 'ON' or 'OFF') .. ' | Scope: '..tostring(self.db.defaultScope)..' | Last item: '
-    .. tostring(l.itemID or 'none') .. ' | Spell: ' .. tostring(l.spellID or '-')
-    .. ' | Result: ' .. tostring(l.result) .. ' | Own echo: ' .. tostring(l.echo)
-    .. ' | Language: '..tostring(self.db.language)..' | Mode: '..tostring(l.channel or '-')
-    .. ' | Trigger: '..tostring(l.trigger or '-')
-    .. ' | RP cooldown: '..tostring(self.db.globalCooldown or 30)..'s'
-    .. ' | Last stock: '..tostring(l.stock or 'normal'))
+  self:Say(self:L('Auto: %s | Group setting: %s | Last item: %s | Spell: %s | Result: %s | Own echo: %s | Language: %s | Source: %s | Trigger: %s | RP cooldown: %ss | Last stock: %s | Destination: %s',
+    self:L(self.db.auto and 'ON' or 'OFF'),
+    self:L(self.GroupScopeNames[self.db.groupScope] or tostring(self.db.groupScope)),
+    tostring(l.itemID or 'none'),tostring(l.spellID or '-'),tostring(l.result),tostring(l.echo),
+    self.LanguageCaption and self:LanguageCaption() or tostring(self.db.language),
+    tostring(l.textSource or '-'),tostring(l.trigger or '-'),tostring(self.db.globalCooldown or 30),
+    tostring(l.stock or 'normal'),tostring(l.destination or select(2,self:GetGroupContext()) or 'none')))
   if self.hearthCast then
     self:Say('Hearthstone: '..tostring(self.hearthCast.state)..' | elapsed='..math.floor(self:Now()-(self.hearthCast.at or 0))..'s')
   end
@@ -124,33 +130,37 @@ function A:Slash(text)
     self:ShowConfig()
   elseif command=='scan' then
     self:ResetInventory()
-    self:Say('Bag scan complete. ' .. self:InventorySummary() .. '. /frp config for items.')
+    self:Say(self:L('Bag scan complete. %s. /frp config for items.',self:InventorySummary()))
     self:RefreshConfig()
   elseif command=='status' then
     self:PrintStatus()
   elseif command=='compat' then
     self:PrintCompat()
+  elseif command:match('^language%s+') then
+    local mode=command:match('^language%s+(.+)$')
+    if self.SetLanguageMode and self:SetLanguageMode(mode) then
+      self:Say(self:L('Language: %s',self:LanguageCaption()))
+    elseif mode~='auto' and mode~='en' and mode~='de' then
+      self:Say('Language options: auto, en, de')
+    end
   elseif command=='auto on' or command=='auto off' then
     self.db.auto=(command=='auto on')
-    self:Say('Automatic RP emotes ' .. (self.db.auto and 'enabled' or 'disabled'))
+    self:Say('Automatic group RP ' .. (self.db.auto and 'enabled' or 'disabled'))
     self:RefreshConfig()
   elseif command=='debug on' or command=='debug off' then
     self.db.debug=(command=='debug on')
     self:Say('Debug ' .. (self.db.debug and 'enabled' or 'disabled'))
-  elseif command:match('^scope%s+') then
-    local scope=command:match('^scope%s+(.+)$')
-    if self.ValidScopes[scope] then
-      self.db.defaultScope=scope
-      self:Say('Default emote scope: '..self.ScopeNames[scope])
-      self:RefreshConfig()
-    else
-      self:Say('Scope options: always, group, instance, off')
-    end
+  elseif command:match('^groups%s+') then
+    local value=command:match('^groups%s+(.+)$')
+    if self.GroupScopeNames[value] then
+      self.db.groupScope=value
+      self:Say(self:L('Global group output: %s',self:L(self.GroupScopeNames[value]))); self:RefreshConfig()
+    else self:Say('Group options: groups, dungeons, raids, disabled') end
   elseif command:match('^cooldown%s+%d+$') then
     local seconds=tonumber(command:match('^cooldown%s+(%d+)$'))
     if seconds==0 or seconds==15 or seconds==30 or seconds==60 or seconds==120 then
       self.db.globalCooldown=seconds
-      self:Say('Shared RP cooldown set to '..seconds..'s')
+      self:Say(self:L('Shared RP cooldown set to %ds',seconds))
       self:RefreshConfig()
     else self:Say('Allowed cooldowns: 0, 15, 30, 60, 120 seconds.') end
   elseif command=='minimap on' or command=='minimap off' then
@@ -161,7 +171,7 @@ function A:Slash(text)
   elseif command=='preview' then
     self:Say(self.last.text or 'No confirmed consumption yet.')
   else
-    self:Say('Commands: /frp config | scan | status | minimap on/off | compat | preview | auto on/off | scope always/group/instance/off | cooldown 0/15/30/60/120 | debug on/off')
+    self:Say('Commands: /frp config | scan | status | minimap on/off | compat | preview | language auto/en/de | auto on/off | groups groups/dungeons/raids/disabled | cooldown 0/15/30/60/120 | debug on/off')
   end
 end
 SLASH_FOREVERRP1='/frp'
@@ -185,12 +195,16 @@ A.eventFrame:RegisterEvent('PLAYER_LOGIN')
 A.eventFrame:RegisterEvent('PLAYER_LOGOUT')
 A.eventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
 A.eventFrame:RegisterEvent('BAG_UPDATE_DELAYED')
+A.eventFrame:RegisterEvent('GET_ITEM_INFO_RECEIVED')
 A.eventFrame:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED','player')
 A.eventFrame:RegisterUnitEvent('UNIT_SPELLCAST_START','player')
 A.eventFrame:RegisterUnitEvent('UNIT_SPELLCAST_FAILED','player')
 A.eventFrame:RegisterUnitEvent('UNIT_SPELLCAST_INTERRUPTED','player')
 A.eventFrame:RegisterEvent('CHAT_MSG_EMOTE')
 A.eventFrame:RegisterEvent('CHAT_MSG_SAY')
+for _,event in ipairs({'CHAT_MSG_PARTY','CHAT_MSG_PARTY_LEADER','CHAT_MSG_RAID','CHAT_MSG_RAID_LEADER','CHAT_MSG_INSTANCE_CHAT','CHAT_MSG_INSTANCE_CHAT_LEADER'}) do
+  A.eventFrame:RegisterEvent(event)
+end
 A.eventFrame:SetScript('OnEvent',function(_,event,...)
   if event=='PLAYER_LOGIN' then A:Init()
   elseif event=='PLAYER_LOGOUT' then
@@ -200,6 +214,8 @@ A.eventFrame:SetScript('OnEvent',function(_,event,...)
       A:ResetInventory()
       -- No post-teleport emote: departure announcements happen at cast start.
     end
+  elseif event=='GET_ITEM_INFO_RECEIVED' then
+    if A.OnQuestItemInfoReceived then A:OnQuestItemInfoReceived(...) end
   elseif event=='BAG_UPDATE_DELAYED' then
     if A.db then A:OnBagsChanged() end
   elseif event=='UNIT_SPELLCAST_START' then
@@ -211,7 +227,7 @@ A.eventFrame:SetScript('OnEvent',function(_,event,...)
   elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
     local unit, castGUID, spellID=...
     if A:SafeCastValues(castGUID,spellID,unit) and unit=='player' and A.db then A:OnSpellSucceeded(castGUID,spellID) end
-  elseif event=='CHAT_MSG_EMOTE' or event=='CHAT_MSG_SAY' then
+  elseif event:match('^CHAT_MSG_') then
     if A.db then A:OnChatEcho(event,...) end
   end
 end)

@@ -1,4 +1,7 @@
 local A=ForeverRP
+local function fmt(key,...)
+  return A.L and A:L(key,...) or string.format(key,...)
+end
 A.MAX_LINES_PER_ITEM=100
 A.shuffles={}
 A.lastProbe=nil
@@ -32,19 +35,19 @@ function A:ParseLines(text,itemLink)
     line=line:match('^%s*(.-)%s*$')
     if line~='' then
       if #lines>=self.MAX_LINES_PER_ITEM then
-        return nil,'Line '..sourceLine..': maximum '..self.MAX_LINES_PER_ITEM..' phrases per text pool.'
+        return nil,fmt('Line %d: maximum %d phrases per text pool.',sourceLine,self.MAX_LINES_PER_ITEM)
       end
       if #line>200 then
-        return nil,'Line '..sourceLine..': maximum 200 bytes per phrase ('..#line..' bytes).'
+        return nil,fmt('Line %d: maximum 200 bytes per phrase (%d bytes).',sourceLine,#line)
       end
       -- Never allow a user-supplied WoW hyperlink to bypass the real {item} link.
       if line:find('|H',1,true) or line:find('|h',1,true) then
-        return nil,'Line '..sourceLine..': paste plain text, not item hyperlinks; {item} is optional.'
+        return nil,fmt('Line %d: paste plain text, not item hyperlinks; {item} is optional.',sourceLine)
       end
       if type(itemLink)=='string' and itemLink~='' and line:find('{item}',1,true) then
         local rendered=line:gsub('{item}',function()return itemLink end)
         if #rendered>255 then
-          return nil,'Line '..sourceLine..': rendered item link makes the message '..#rendered..' bytes (max. 255).'
+          return nil,fmt('Line %d: rendered item link makes the message %d bytes (max. 255).',sourceLine,#rendered)
         end
       end
       lines[#lines+1]=line
@@ -76,7 +79,7 @@ function A:SetPhrases(cfg,language,kind,lines,isStock)
     or ({en_me='lines',en_say='sayLines',de_me='deMeLines',de_say='deSayLines'})[key]
   cfg[field]=lines
 end
-A.OutputModes={me='Only /me',say='Only /say',mixed='Mixed /me + /say'}
+A.OutputModes={me='Action text',say='Speech text',mixed='Mixed action + speech'}
 A.OutputOrder={'me','say','mixed'}
 function A:GetAvailableChannels(cfg,lang,isStock,id)
   if not id and self.db then
@@ -90,7 +93,7 @@ function A:GetAvailableChannels(cfg,lang,isStock,id)
   end
   return result
 end
-function A:Pick(id,lines,language,channel,isStock,avoidText)
+function A:Pick(id,lines,language,channel,isStock,avoidText,avoidOtherText)
   local key=tostring(id)..':'..language..':'..channel..(isStock and ':stock' or ':normal')
   local signature=table.concat(lines,"\n")
   local shuffle=self.shuffles[key]
@@ -109,11 +112,21 @@ function A:Pick(id,lines,language,channel,isStock,avoidText)
     end
     self.shuffles[key]=shuffle
   end
-  if avoidText and lines[shuffle.deck[#shuffle.deck]]==avoidText then
+  local function avoided(text) return (avoidText and text==avoidText) or (avoidOtherText and text==avoidOtherText) end
+  if avoided(lines[shuffle.deck[#shuffle.deck]]) then
+    local swapped=false
     for i=1,#shuffle.deck-1 do
-      if lines[shuffle.deck[i]]~=avoidText then
+      if not avoided(lines[shuffle.deck[i]]) then
         shuffle.deck[i],shuffle.deck[#shuffle.deck]=shuffle.deck[#shuffle.deck],shuffle.deck[i]
-        break
+        swapped=true;break
+      end
+    end
+    if not swapped then
+      for _,text in ipairs(lines) do
+        if not avoided(text) then
+          shuffle.deck={}
+          return self:Pick(id,lines,language,channel,isStock,avoidText,avoidOtherText)
+        end
       end
     end
   end
@@ -121,21 +134,95 @@ function A:Pick(id,lines,language,channel,isStock,avoidText)
   shuffle.previous=n
   return lines[n]
 end
+-- Manual mode only prepares text. The player opens and submits the normal chat box.
+function A:OpenManualChat()
+  local draft=self.manualDraft
+  self.manualDraft=nil
+  if not draft or self:Now()<draft.at or self:Now()-draft.at>15 then
+    self:Say('No fresh RP draft. Use an enabled item first (draft expires after 15 seconds).')
+    return
+  end
+  local cfg=self:GetSettings(draft.itemID)
+  if self.db.chatDestination~='local' or not self.db.manualChat or not self.db.auto or not cfg or not cfg.enabled
+    or not self:CanSendLegacyInContext(draft.itemID) then return end
+  local mode=self.OutputModes[cfg.outputMode] and cfg.outputMode or 'me'
+  if mode~='mixed' and mode~=draft.channel then return end
+  if InCombatLockdown and InCombatLockdown() then
+    self:Say('RP draft unavailable during combat.')
+    return
+  end
+  if draft.itemID==6948 and (not self.hearthCast or self.hearthCast.state~='not_announced') then
+    self:Say('Hearthstone departure draft expired when the cast ended.')
+    return
+  end
+  if C_ChatInfo and C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then return end
+  local now=type(time)=='function' and time() or math.floor(self:Now())
+  local elapsed=now-(self.db.globalLastEmoteAt or 0)
+  local secs=self.db.globalCooldown or 30
+  if secs>0 and elapsed>=0 and elapsed<secs then return end
+  if draft.itemID==6948 and now-(self.db.hearthLastAnnounceAt or 0)<120 then return end
+  local getActive=ChatFrameUtil and ChatFrameUtil.GetActiveWindow or ChatEdit_GetActiveWindow
+  local active=type(getActive)=='function' and getActive()
+  if active then
+    self:Say('Finish your current chat draft first; RP text was not inserted.')
+    return
+  end
+  local open=ChatFrameUtil and ChatFrameUtil.OpenChat or ChatFrame_OpenChat
+  if type(open)~='function' then
+    self:Say('Chat draft API unavailable. Local preview: '..draft.text)
+    return
+  end
+  local ok=pcall(open,(draft.channel=='say' and '/say ' or '/emote ')..draft.text)
+  if not ok then self.last.result='manual_chat_draft_rejected'; return end
+  self.lastProbe={at=self:Now(),start=draft.text,observed=false,itemID=draft.itemID,
+    channel=draft.channel,manual=true}
+  self.last.result='manual_chat_draft_opened_press_enter'
+  -- No send timestamp here: opening/cancelling an edit box does not send chat.
+end
+-- Group destination is independent of context scope and phrase-pool selection.
+function A:GetGroupChatDestination()
+  local _,destination=self:GetGroupContext()
+  return destination
+end
+function A:GetGroupSpeechChannels(cfg,lang,stock,id)
+  if not id and self.db then for itemID,item in pairs(self.db.items) do if item==cfg then id=itemID;break end end end
+  local lines=self.GetResolvedPhrases and id and self:GetResolvedPhrases(id,lang,'say',stock) or self:GetPhrases(cfg,lang,'say',stock)
+  return #lines>0 and {'say'} or {}
+end
+-- Public automatic path: speech only, regardless of dormant legacy settings.
 function A:SendForItem(id,link,isStock)
+  if self.IsQuestItem and self:IsQuestItem(id) then
+    self.last.result='quest_item_excluded_no_send'; return
+  end
+  return self:SendLegacyForItem(id,link,isStock,true)
+end
+-- Retained local /me and /say implementation for possible future client support.
+function A:SendLegacyForItem(id,link,isStock,groupSpeech)
+  self.manualDraft=nil
   local cfg=self:GetSettings(id)
+  self:Debug('RP selection item='..id..' text='..(groupSpeech and 'group speech' or tostring(cfg and cfg.outputMode or 'me'))..' lastItem='..tostring(not not isStock))
   if not cfg or not cfg.enabled then
     self.last.result='confirmed_item_disabled'
     return
   end
   local language=self.db.language=='de' and 'de' or 'en'
-  local channels=self:GetAvailableChannels(cfg,language,isStock,id)
+  local channels=groupSpeech and self:GetGroupSpeechChannels(cfg,language,isStock,id) or self:GetAvailableChannels(cfg,language,isStock,id)
   if #channels==0 then
     self.last.result='confirmed_no_phrases_for_language_or_mode'
     return
   end
-  local allowed,scopeReason=self:CanSendInContext(id)
+  local allowed,scopeReason
+  if groupSpeech then allowed,scopeReason=self:CanSendInContext(id)
+  else allowed,scopeReason=self:CanSendLegacyInContext(id) end
   if not allowed then
     self.last.result='confirmed_scope_suppressed_'..tostring(scopeReason)
+    return
+  end
+  local groupOutput=groupSpeech or self.db.chatDestination~='local'
+  local destination=groupOutput and self:GetGroupChatDestination() or nil
+  self.last.destination=destination or (groupOutput and 'none' or 'local')
+  if groupOutput and not destination and self.db.auto then
+    self.last.result='confirmed_no_group_no_send'
     return
   end
   -- /say automated outdoors requires a hardware event. Never silently fall
@@ -143,7 +230,7 @@ function A:SendForItem(id,link,isStock)
   local eligible={}
   local inInstance=type(IsInInstance)=='function' and IsInInstance() or false
   for _,ch in ipairs(channels) do
-    if ch=='me' or inInstance then eligible[#eligible+1]=ch end
+    if groupOutput or self.db.manualChat or ch=='me' or inInstance then eligible[#eligible+1]=ch end
   end
   if #eligible==0 then
     self.last.result='confirmed_say_hardware_restricted_outdoors_no_send'
@@ -153,7 +240,10 @@ function A:SendForItem(id,link,isStock)
   local channel=eligible[math.random(#eligible)]
   local lines=self:GetPhrases(cfg,language,channel,isStock)
   local template
-  if self.PickLibrary then template=self:PickLibrary(id,language,channel,isStock)
+  if self.PickLibrary then
+    template=self:PickLibrary(id,language,channel,isStock)
+    self.last.textSource=self.lastLibrarySource
+    self:Debug('Text source='..tostring(self.lastLibrarySource)..' (general/racial/class default weights 50/30/20)')
   else template=self:Pick(id,lines,language,channel,isStock) end
   if not template then self.last.result="confirmed_no_phrases_for_language_or_mode"; return end
   if template:find('{item}',1,true)
@@ -162,9 +252,18 @@ function A:SendForItem(id,link,isStock)
     return
   end
   local message=template:gsub('{item}',function() return link end)
+  if groupOutput and channel=='me' then
+    local name=type(UnitName)=='function' and UnitName('player') or nil
+    if type(issecretvalue)=='function' and issecretvalue(name) then name=nil end
+    if type(name)~='string' or name=='' then
+      self.last.result='confirmed_player_name_unavailable_no_send'; return
+    end
+    message=name..' '..message
+  end
   self.last.text=message
   self.last.channel=channel
   self.last.echo='none'
+  self:Debug('RP prepared pool='..channel..' destination='..tostring(destination or 'local')..' bytes='..#message)
   if #message>255 then
     self.last.result='confirmed_message_exceeds_chat_limit_no_send'
     self:Say('RP text exceeds 255 chat bytes for item '..id..'.')
@@ -180,10 +279,6 @@ function A:SendForItem(id,link,isStock)
     self:Say('Chat lockdown. Local preview: '..message)
     return
   end
-  if not (C_ChatInfo and C_ChatInfo.SendChatMessage) then
-    self.last.result='confirmed_chat_api_unavailable'
-    return
-  end
   local secs=self.db.globalCooldown or 30
   local elapsed=(type(time)=='function' and time() or math.floor(self:Now()))-(self.db.globalLastEmoteAt or 0)
   if secs>0 and elapsed>=0 and elapsed<secs then
@@ -191,11 +286,23 @@ function A:SendForItem(id,link,isStock)
     self:Debug('Shared RP throttle suppressed message: '..(secs-elapsed)..'s left.')
     return false
   end
-  local probe={at=self:Now(),start=message:match('^([^|]+)') or '',observed=false,itemID=id,channel=channel}
+  if not groupOutput and self.db.manualChat then
+    self.manualDraft={at=self:Now(),itemID=id,channel=channel,text=message}
+    self.last.result='confirmed_manual_draft_ready_no_send'
+    self:Say('RP ready: /frp send opens the text; press Enter to send (15 seconds).')
+    return false
+  end
+  if not (C_ChatInfo and C_ChatInfo.SendChatMessage) then
+    self.last.result='confirmed_chat_api_unavailable'
+    return
+  end
+  destination=destination or (channel=='say' and 'SAY' or 'EMOTE')
+  self.last.destination=destination
+  local probe={at=self:Now(),start=message:match('^([^|]+)') or '',observed=false,itemID=id,channel=channel,destination=destination}
   self.lastProbe=probe
   self.last.result='confirmed_send_attempted_no_echo_yet'
-  local ok,err=pcall(C_ChatInfo.SendChatMessage,message,channel=='say' and 'SAY' or 'EMOTE')
-  if not ok then
+  local ok,err=pcall(C_ChatInfo.SendChatMessage,message,destination)
+  if not ok or err==false then
     self.lastProbe=nil
     self.last.result='confirmed_send_rejected'
     self:Say('RP message rejected: '..tostring(err))
@@ -205,7 +312,7 @@ function A:SendForItem(id,link,isStock)
   -- A local chat echo confirms reception later; delivery to others is unverified.
   self.db.globalLastEmoteAt=(type(time)=='function' and time() or math.floor(self:Now()))
   self.last.stock=isStock and 'out_of_stock' or 'normal'
-  self:Debug('Automatic /'..(channel=='say' and 'say' or 'me')..' attempted, item '..id)
+  self:Debug('RP send attempted to '..destination..', item '..id)
   if C_Timer and C_Timer.After then
     C_Timer.After(3,function()
       if A.lastProbe==probe and not probe.observed then
@@ -219,7 +326,10 @@ end
 function A:OnChatEcho(event,message,author,_,_,_,_,_,_,_,_,_,guid)
   local p=self.lastProbe
   if not p or p.observed or self:Now()-p.at>8 then return end
-  if event~=(p.channel=='say' and 'CHAT_MSG_SAY' or 'CHAT_MSG_EMOTE') then return end
+  local expected=p.destination and ('CHAT_MSG_'..p.destination) or (p.channel=='say' and 'CHAT_MSG_SAY' or 'CHAT_MSG_EMOTE')
+  if event~=expected and not (p.destination=='RAID' and event=='CHAT_MSG_RAID_LEADER')
+    and not (p.destination=='PARTY' and event=='CHAT_MSG_PARTY_LEADER')
+    and not (p.destination=='INSTANCE_CHAT' and event=='CHAT_MSG_INSTANCE_CHAT_LEADER') then return end
   if type(issecretvalue)=='function' then
     if issecretvalue(message) or issecretvalue(author) or issecretvalue(guid) then return end
   end
@@ -231,7 +341,13 @@ function A:OnChatEcho(event,message,author,_,_,_,_,_,_,_,_,_,guid)
     return
   end
   if #p.start>=8 and not message:find(p.start,1,true) then return end
+  if p.manual and not message:find(p.start,1,true) then return end
   p.observed=true
+  if p.manual then
+    local now=type(time)=='function' and time() or math.floor(self:Now())
+    self.db.globalLastEmoteAt=now
+    if p.itemID==6948 then self.db.hearthLastAnnounceAt=now end
+  end
   self.last.echo='observed'
   self.last.result='confirmed_own_'..p.channel..'_echo_observed'
   self:Debug('Own '..p.channel..' chat event observed. External delivery not verified.')

@@ -5,7 +5,10 @@ local entries,old,new={},{},{}
 for _,pool in ipairs({a.DefaultEntries,a.RaceEntries}) do
  for _,e in ipairs(pool) do
   entries[#entries+1]=e
-  if e.id:find(':identity-',1,true) then -- additive identity entry, not part of frozen registry
+  if e.id:find(':native-0100-',1,true) then -- German content tested separately
+  elseif e.id:find(':voice-',1,true) then -- additive curated identity speech, separately tested
+  elseif e.id:find(':group-speech-',1,true) then -- tested separately; additive group speech
+  elseif e.id:find(':identity-',1,true) then -- additive identity entry, not part of frozen registry
   elseif e.id:find(':editorial-',1,true) then new[#new+1]=e else old[#old+1]=e end
  end
 end

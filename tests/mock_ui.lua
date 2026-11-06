@@ -97,7 +97,8 @@ A.inventory[118]={count=5,name='Minor Healing Potion',icon=123,link='|Hitem:118|
 A.inventory[1179]={count=2,name='Ice Cold Milk',icon=456,link='|Hitem:1179|h[Ice Cold Milk]|h',autoCategory='drink'}
 A:BuildConfig()
 assert(A.configFrame._kind=='Frame','uses independent themed window')
-assert(A.tabButtons.regular.SetSelected and A.channelButtons.me.SetSelected,'real selection-enabled tabs')
+assert(A.tabButtons.regular.SetSelected and A.activeChannel=='say' and A.modeDropdown==nil and next(A.channelButtons)==nil,'group-only controls missing')
+A:SwitchChannel('me') -- retained internal legacy editor API; no UI control exposes it
 assert(A.listScroll~=nil,'list panel built')
 assert(A.configFrame and A.listScroll and A.libraryContent and not A.tabButtons.templates,'building inline default UI')
 A:SelectItem(118)
@@ -282,22 +283,8 @@ StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnCancel()
 assert(A.customEditor:IsShown(),'keep editing should reopen editor')
 StaticPopupDialogs.FOREVERRP_DISCARD_INVALID.OnAccept()
 assert(A.editorDirty==false and A.textEditor:GetText()==old,'discard should restore saved phrase')
--- Mode changes seed only missing Last Item pools, without replacing drafts,
--- custom pools, explicit empty pools or the Last Item opt-out.
-local cfg=A.db.items[118]
-local function chooseMode(mode)
- A.modeDropdown._menu(nil,{CreateRadio=function(_,_,_,choose,key)
-  if key==mode then choose(key) end
- end})
-end
-cfg.outputMode='me';cfg.outOfStockEnabled=true
-local custom={'custom last me'};cfg.outMeLines=custom;cfg.outSayLines=nil
-chooseMode('say')
-assert(cfg.outputMode=='say' and cfg.outSayLines==nil and #A:GetResolvedPhrases(118,'en','say',true)>0 and cfg.outMeLines==custom,'mode switch omitted Last Item say default')
-local empty={};cfg.outSayLines=empty;chooseMode('mixed')
-assert(cfg.outSayLines==empty and cfg.outMeLines==custom,'mode switch overwrote existing pools')
-cfg.outOfStockEnabled=false;cfg.outSayLines=nil;chooseMode('say')
-assert(cfg.outSayLines==nil and cfg.outOfStockEnabled==false,'mode switch ignored Last Item opt-out')
+-- Output modes remain stored but are no longer exposed in the UI.
+assert(A.modeDropdown==nil and A.db.items[118].outputMode=='mixed')
 print('PASS v0.9.17 mock WoW UI: optional placeholder, exact newlines, validation, restore, autosave, icon layer, cursor scrolling, mode defaults')
 
 -- Default sections follow tab/channel/category changes and preserve bad drafts.
@@ -399,7 +386,7 @@ A:SwitchChannel('say')
 local sayBefore=A.textEditor:GetText()
 stale()
 assert(A.textEditor:GetText()==sayBefore and A.db.items[118].lines[1]=='timer lifetime check')
-assert(A.customChannelButtons.say._selected and not A.customChannelButtons.me._selected)
+assert(next(A.customChannelButtons)==nil,'channel controls remain visible')
 A:SwitchTab('last')
 assert(A.customTabButtons.last._selected and not A.customTabButtons.regular._selected)
 -- Exercise real logout dispatch with the real editor, before debounce runs.
@@ -421,5 +408,5 @@ A.selectedID=nil;A.editorDirty=false
 A:BuildConfig()
 assert(A.customEditor:IsShown() and A.selectedID==118 and A.activeTab=='last' and A.activeChannel=='say')
 assert(A.textEditor:GetText()==string.rep('z',201) and A.editorDirty,'build lost reload draft')
-assert(A.customTabButtons.last._selected and A.customChannelButtons.say._selected)
+assert(A.customTabButtons.last._selected and next(A.customChannelButtons)==nil)
 print('PASS actual logout flush and BuildConfig reload recovery')

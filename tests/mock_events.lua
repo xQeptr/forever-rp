@@ -24,8 +24,11 @@ local function ok(x,msg) if not x then error(msg,2) end end
 local files={'Core.lua','Compat.lua','Categories.lua','Samples.lua','LocalizedSamples.lua','ExtendedSamples.lua','AlcoholSamples.lua','StockSamples.lua','DefaultLibrary.lua','RaceLibrary.lua','Library.lua','Inventory.lua','Scopes.lua','Emotes.lua','Config.lua','Minimap.lua'}
 for _,f in ipairs(files) do assert(loadfile(BASE..f))() end
 local a=ForeverRP
+a.SendForItem=a.SendLegacyForItem
+a.CanSendInContext=a.CanSendLegacyInContext
+a.GetGroupSpeechChannels=a.GetAvailableChannels
 -- pre-existing settings survive migration.
-ForeverRPDB={items={[118]={name='Minor Healing Potion',enabled=true,lines={'uses a {item}.'},outOfStockEnabled=true,outMeLines={'finishes the last {item}. "Out!"'}},
+ForeverRPDB={chatDestination="local",items={[118]={name='Minor Healing Potion',enabled=true,lines={'uses a {item}.'},outOfStockEnabled=true,outMeLines={'finishes the last {item}. "Out!"'}},
   [1179]={name='Ice Cold Milk',enabled=true,outOfStockEnabled=false,lines={'sips {item}.'}},[333]={name='Legacy enabled Potion',enabled=true,lines={'drinks {item}.'}}},defaultScope='always',auto=true,showMinimap=false}
 a.ScanBags=function() return {},{} end
 a.SetupMinimap=function() end

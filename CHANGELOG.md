@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
+- Add Automatic / English / Deutsch selection in the header and `/frp language auto|en|de`; Automatic follows the game locale (deDE German, otherwise English).
+- Translate the configuration, validation, menus and common feedback into German; switch immediately without changing chat transport.
+- Add 966 independently authored German group speech lines: 192 general, 432 class and 342 racial, with Last Item lines and Hearthstone departures.
+- Preserve separate custom pools and stable opt-outs in both languages; save valid edits before switching, block invalid switches and retain language-tagged drafts across locale changes.
+- Keep shared cooldowns and saved player data across language switches; package Unicode text explicitly as UTF-8.
+- Add bilingual UI, locale/migration/draft, active group-send, German text-quality and 50/30/20 regressions. Real-client locale/layout and recipient delivery remain unverified.
+- Hide quest tools/quest-associated items from scans, remembered lists and active sends using guarded quest, class and binding metadata; preserve saved data and archived invalid drafts.
+- Add 955 original race/class speech lines (603 class, 352 racial) with category-specific regular and Last Item dialogue.
+- Choose eligible default sources at 50/30/20 before phrase selection; preserve shuffle/no-repeat across items, proportional fallback and custom-text tickets, and show active source counts/weights.
+- Focus the active addon on automatic group speech, with Groups (all), Dungeons, Raids and Disabled policies; detect PARTY/RAID/INSTANCE_CHAT and suppress solo/PvP contexts.
+- Remove action/speech mode and channel controls; keep legacy local send code, phrase pools, modes and scopes dormant and preserve unsaved legacy drafts.
+- Add 192 category-specific English speech lines, including 72 Last Item lines and 12 Hearthstone departures.
+- Correlate shared-spell consumables with passively observed bag/action/item-use identity, while still requiring spell success and a matching stock decrease within three seconds.
+- Default automatic RP to PARTY/RAID/INSTANCE_CHAT, with no solo send; retain local chat as an explicit alternative and preserve phrase pools and saved preferences.
+- Add opt-in manual chat confirmation (`/frp manual on`, `/frp send`) for clients blocking automatic RP chat; opening a draft never sends or spends cooldown.
+- Add regression checks for manual drafts, scope/channel guards, expiration and own-echo cooldown tracking.
+
+## v0.9.21-beta (pre-release)
+- Add Skyborne defaults with silver-blue text and Skyborne/Skybourne FileString detection, without guessing a numeric race ID.
+- Add nine class-specific phrase pools in class colors and 380 new identity phrases.
+- Select eligible default sources with nominal 50/30/20 general/race/class weighting; no-repeat rules can affect observed proportions.
+- Show the loaded addon version dynamically and remove Eternal Ink from current UI/README labeling.
+- Add identity regression coverage to Lua 5.1/5.4 CI and release validation.
+- Preserve existing phrase IDs, custom texts, opt-outs, consumption rules and cooldowns.
+- Retail remains beta and Forever preview; real-client checks and Healthstone charges remain unverified.
 
 ## v0.9.20-beta (pre-release)
 - Fill the custom writing viewport with the native EditBox; focus blank clicks at text end while preserving native selection and scrolling.

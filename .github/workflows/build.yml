@@ -21,11 +21,22 @@ jobs:
           lua${{ matrix.lua }} tests/mock_ui.lua
           lua${{ matrix.lua }} tests/mock_events.lua
           lua${{ matrix.lua }} tests/mock_scanner.lua
+          lua${{ matrix.lua }} tests/mock_quest_items.lua
+          lua${{ matrix.lua }} tests/mock_quest_ui.lua
           lua${{ matrix.lua }} tests/mock_library.lua
           lua${{ matrix.lua }} tests/mock_text_quality.lua
           lua${{ matrix.lua }} tests/mock_identity.lua
+          lua${{ matrix.lua }} tests/mock_identity_speech.lua
+          lua${{ matrix.lua }} tests/mock_manual_chat.lua
+          lua${{ matrix.lua }} tests/mock_group_chat.lua
+          lua${{ matrix.lua }} tests/mock_group_speech.lua
+          lua${{ matrix.lua }} tests/mock_group_ui.lua
+          lua${{ matrix.lua }} tests/mock_item_source.lua
+          lua${{ matrix.lua }} tests/mock_localization.lua
+          lua${{ matrix.lua }} tests/mock_localization_ui.lua
+          lua${{ matrix.lua }} tests/mock_german_speech.lua
       - name: Package Retail and Forever
-        run: python3 tools/package.py --version 0.9.20-beta
+        run: python3 tools/package.py --version 0.10.0
       - uses: actions/upload-artifact@v4
         with:
           name: ForeverRP-test-builds-lua${{ matrix.lua }}

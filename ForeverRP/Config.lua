@@ -2,13 +2,21 @@
 -- Global settings above the persistent inventory; item controls and real-looking tabs on right.
 -- Combat triggers, item verification, throttling and saved variable field names unchanged.
 local A = ForeverRP
+local function tr(text,...)
+  if A.L then return A:L(text,...) end
+  return select('#',...)>0 and string.format(text,...) or text
+end
+local function bind(widget,key)
+  if A.BindLocalizedText then A:BindLocalizedText(widget,key) end
+end
 local ROW_HEIGHT = 34
 local ITEM_WIDTH = 258
 
 local function label(parent, text, x, y, font)
   local fs = parent:CreateFontString(nil, 'OVERLAY', font or 'GameFontHighlightSmall')
   fs:SetPoint('TOPLEFT', parent, 'TOPLEFT', x, y)
-  fs:SetText(text or '')
+  fs:SetText(tr(text or ''))
+  bind(fs,text)
   return fs
 end
 -- No red UI-Panel button textures: use slate, subtle bronze edges and golden text.
@@ -45,7 +53,8 @@ local function button(parent, text, width, height, x, y, callback)
   b.inner=inner
   local caption=b:CreateFontString(nil,'OVERLAY','GameFontNormalSmall')
   caption:SetPoint('CENTER')
-  caption:SetText(text or '')
+  caption:SetText(tr(text or ''))
+  bind(caption,text)
   caption:SetTextColor(.97,.81,.54)
   b:SetFontString(caption)
   b:SetScript('OnEnter',function(self) self.inner:SetColorTexture(.25,.33,.39,1) end)
@@ -66,7 +75,8 @@ local function navTab(parent, title, x, y, w, h, callback, compact)
   line:SetHeight(compact and 2 or 3)
   local caption=b:CreateFontString(nil,'OVERLAY',compact and 'GameFontNormalSmall' or 'GameFontNormal')
   caption:SetPoint('CENTER',b,'CENTER',0,1)
-  caption:SetText(title)
+  caption:SetText(tr(title))
+  bind(caption,title)
   b._selected=false
   function b:SetSelected(yes)
     self._selected=not not yes
@@ -131,16 +141,16 @@ local function dropdown(parent, x, y, width, placeholder, entries, choose, curre
   if ok and result and type(result.SetupMenu) == 'function' then
     result:SetPoint('TOPLEFT', parent, 'TOPLEFT', x, y)
     result:SetSize(width, 28)
-    result:SetDefaultText(placeholder)
+    result:SetDefaultText(tr(placeholder))
     result:SetupMenu(function(_, root)
       for _, entry in ipairs(entries()) do
         local key = entry.key
-        root:CreateRadio(entry.label, function(value) return current() == value end,
+        root:CreateRadio(tr(entry.label), function(value) return current() == value end,
           function(value) choose(value) end, key)
       end
     end)
     result.SetCaption = function(self, text)
-      if self.OverrideText then self:OverrideText(text) end
+      if self.OverrideText then self:OverrideText(tr(text)) end
     end
   else
     result = button(parent, placeholder, width, 25, x, y, function(owner)
@@ -148,12 +158,12 @@ local function dropdown(parent, x, y, width, placeholder, entries, choose, curre
       MenuUtil.CreateContextMenu(owner, function(_, root)
         for _, entry in ipairs(entries()) do
           local key = entry.key
-          root:CreateRadio(entry.label, function(value) return current() == value end,
+          root:CreateRadio(tr(entry.label), function(value) return current() == value end,
             function(value) choose(value) end, key)
         end
       end)
     end)
-    result.SetCaption = function(self, text) self:SetText(text) end
+    result.SetCaption = function(self, text) self:SetText(tr(text)) end
   end
   return result
 end
@@ -164,7 +174,7 @@ local function attachItemTooltip(row)
   if meta and meta.link then
     GameTooltip:SetHyperlink(meta.link)
   else
-    GameTooltip:SetText(row.fullName or 'Unknown item')
+    GameTooltip:SetText(row.fullName or tr('Unknown item'))
   end
   GameTooltip:Show()
 end
@@ -174,27 +184,29 @@ function A:ConfigItems()
   local query = (self.searchQuery or ''):lower()
   local filter = self.itemFilter or 'all'
   for id, cfg in pairs(self.db.items) do
-    local meta = self.inventory[id]
-    local title = nameFor(id, cfg, meta)
-    local anyPhrases = false
-    for _, language in ipairs({'en', 'de'}) do
-      for _, channel in ipairs({'me', 'say'}) do
-        if #self:GetResolvedPhrases(id, language, channel) > 0
-          or #self:GetResolvedPhrases(id, language, channel, true) > 0 then
-          anyPhrases = true
+    if not (self.IsQuestItem and self:IsQuestItem(id)) then
+      local meta = self.inventory[id]
+      local title = nameFor(id, cfg, meta)
+      local anyPhrases = false
+      for _, language in ipairs({'en', 'de'}) do
+        for _, channel in ipairs({'me', 'say'}) do
+          if #self:GetResolvedPhrases(id, language, channel) > 0
+            or #self:GetResolvedPhrases(id, language, channel, true) > 0 then
+            anyPhrases = true
+          end
         end
       end
-    end
-    local count = meta and meta.count or 0
-    local include = filter == 'all'
-      or (filter == 'enabled' and cfg.enabled)
-      or (filter == 'disabled' and not cfg.enabled)
-      or (filter == 'unconfigured' and not anyPhrases)
-      or (filter == 'inbags' and count > 0)
-      or (filter == 'saved' and count == 0)
-    if include and (query == '' or title:lower():find(query, 1, true)
-      or tostring(id):find(query, 1, true)) then
-      output[#output + 1] = {id=id, cfg=cfg, meta=meta, title=title, count=count}
+      local count = meta and meta.count or 0
+      local include = filter == 'all'
+        or (filter == 'enabled' and cfg.enabled)
+        or (filter == 'disabled' and not cfg.enabled)
+        or (filter == 'unconfigured' and not anyPhrases)
+        or (filter == 'inbags' and count > 0)
+        or (filter == 'saved' and count == 0)
+      if include and (query == '' or title:lower():find(query, 1, true)
+        or tostring(id):find(query, 1, true)) then
+        output[#output + 1] = {id=id, cfg=cfg, meta=meta, title=title, count=count}
+      end
     end
   end
   table.sort(output, function(a, b)
@@ -206,7 +218,9 @@ function A:ConfigItems()
 end
 function A:CountRemembered()
   local n = 0
-  for _ in pairs(self.db.items) do n = n + 1 end
+  for id in pairs(self.db.items) do
+    if not (self.IsQuestItem and self:IsQuestItem(id)) then n=n+1 end
+  end
   return n
 end
 function A:ToggleItemEnabled(id)
@@ -221,7 +235,7 @@ function A:ToggleItemEnabled(id)
     end
   end
   self:RefreshConfig()
-  if self.editorStatus then self.editorStatus:SetText('RP '..(cfg.enabled and 'enabled' or 'disabled')..' for '..nameFor(id,cfg,self.inventory[id])..'. Saved automatically.') end
+  if self.editorStatus then self.editorStatus:SetText(tr('RP %s for %s. Saved automatically.',tr(cfg.enabled and 'enabled' or 'disabled'),nameFor(id,cfg,self.inventory[id]))) end
 end
 function A:NewInventoryRow(parent, index)
   local row = button(parent, '', ITEM_WIDTH, ROW_HEIGHT - 2, 0, -(index-1)*ROW_HEIGHT, function(self)
@@ -245,7 +259,7 @@ function A:NewInventoryRow(parent, index)
     row.statusShade:SetColorTexture(.25,.33,.41,.99)
     if GameTooltip then
       GameTooltip:SetOwner(row.status,'ANCHOR_RIGHT')
-      GameTooltip:SetText('Click to enable / disable automatic RP for this item')
+      GameTooltip:SetText(tr('Click to enable / disable automatic RP for this item'))
       GameTooltip:Show()
     end
   end)
@@ -300,20 +314,21 @@ end
 -- Persist it immediately so /reload cannot silently discard an invalid edit.
 function A:RememberEditorDraft()
   if self.selectedID and self.editorDirty then
-    self.db.editorDraft={item=self.selectedID,tab=self.activeTab,channel=self.activeChannel,text=self.textEditor:GetText()}
+    self.db.editorDraft={item=self.selectedID,tab=self.activeTab,channel=self.activeChannel,language=self.editorLanguage or self.db.language or 'en',text=self.textEditor:GetText()}
   end
 end
 function A:ShowCustomEditor()
   local draft=self.db.editorDraft
   if type(draft)=='table' and type(draft.item)=='number' and self.db.items[draft.item]
+    and not (self.IsQuestItem and self:IsQuestItem(draft.item))
     and type(draft.text)=='string' and (draft.tab=='regular' or draft.tab=='last')
-    and (draft.channel=='me' or draft.channel=='say') and not self.editorDirty then
+    and draft.channel=='say' and (draft.language==nil or draft.language==(self.db.language or 'en')) and not self.editorDirty then
     self:SelectItem(draft.item)
     self.activeTab,self.activeChannel=draft.tab,draft.channel
     self:ReloadEditor()
     self.loadingEditor=true;self.textEditor:SetText(draft.text);self.loadingEditor=false
     self.editorDirty=true;self:RefreshDetails()
-    self.editorStatus:SetText('Recovered unsaved draft. Correct errors to save, or close to discard explicitly.')
+    self.editorStatus:SetText(tr('Recovered unsaved draft. Correct errors to save, or close to discard explicitly.'))
   end
   if not self.selectedID then return end
   self.customEditor:Show()
@@ -326,23 +341,23 @@ function A:SaveEditor()
   local link = meta and meta.link
   local lines, err = self:ParseLines(self.textEditor:GetText(),link)
   if not lines then
-    self.editorStatus:SetText('|cffff7777Cannot switch or save: ' .. err .. '|r')
+    self.editorStatus:SetText('|cffff7777'..tr('Cannot switch or save: %s',err)..'|r')
     return false
   end
   local stock = self.activeTab == 'last'
-  self:SetCustomPhrases(self.selectedID, 'en', self.activeChannel or 'me', lines, stock)
+  self:SetCustomPhrases(self.selectedID, self.editorLanguage or self.db.language or 'en', self.activeChannel or 'say', lines, stock)
   self.editorDirty = false
   self.db.editorDraft=nil
   self:RefreshTextInfo()
   self.shuffles = {}
-  self.editorStatus:SetText('|cff92db9eSaved ' .. #lines .. ' /' .. (self.activeChannel or 'me') ..
-    ' ' .. (stock and 'last-item' or 'regular') .. ' phrases.|r')
+  self.editorStatus:SetText('|cff92db9e'..tr('Saved %d %s phrases.',#lines,tr(stock and 'last-item' or 'regular'))..'|r')
   return true
 end
 function A:ReloadEditor()
   if not self.textEditor then return end
   local cfg = self.selectedID and self.db.items[self.selectedID]
-  local lines = cfg and self:GetCustomPhrases(self.selectedID, 'en', self.activeChannel or 'me', self.activeTab == 'last') or {}
+  self.editorLanguage=self.db.language or 'en'
+  local lines = cfg and self:GetCustomPhrases(self.selectedID, self.editorLanguage, self.activeChannel or 'say', self.activeTab == 'last') or {}
   self.loadingEditor = true
   self.textEditor:SetText(formatLines(lines))
   self.textEditor:SetCursorPosition(0)
@@ -368,6 +383,7 @@ function A:SwitchChannel(channel)
   self:RefreshDetails()
 end
 function A:SelectItem(id)
+  if self.IsQuestItem and self:IsQuestItem(id) then return end
   if self.selectedID == id then return end
   if not self:SaveEditor() then return end
   if not self.db.items[id] then return end
@@ -375,17 +391,17 @@ function A:SelectItem(id)
   -- Clicking an item shows its phrases immediately, not a separate Items tab.
   self.activeTab = 'regular'
   self:ReloadEditor()
-  self.editorStatus:SetText('Item selected. Valid edits save automatically.')
+  self.editorStatus:SetText(tr('Item selected. Valid edits save automatically.'))
   self:RefreshConfig()
 end
 function A:RefreshTextInfo()
   if not self.textCount then return end
   local id=self.selectedID
-  if not id then self.textCount:SetText('');return end
-  local u,r,k,c=self:GetLibrarySources(id,'en',self.activeChannel or 'me',self.activeTab=='last')
-  self.textCount:SetText('Current: '..(#u+#r+#k)..' active defaults / '..#c..' custom.  Regular: '..#self:GetResolvedPhrases(id,'en','me')..' /me, '..
-    #self:GetResolvedPhrases(id,'en','say')..' /say | Last: '..
-    #self:GetResolvedPhrases(id,'en','me',true)..' /me, '..#self:GetResolvedPhrases(id,'en','say',true)..' /say')
+  if not id then self.textCount:SetText(tr(''));return end
+  local u,r,k,c=self:GetLibrarySources(id,self.db.language or 'en',self.activeChannel or 'say',self.activeTab=='last')
+  local total=(#u>0 and 50 or 0)+(#r>0 and 30 or 0)+(#k>0 and 20 or 0)
+  local mix=total>0 and string.format('%.1f / %.1f / %.1f%%',#u>0 and 5000/total or 0,#r>0 and 3000/total or 0,#k>0 and 2000/total or 0) or tr('custom only')
+  self.textCount:SetText(tr('Active: %d general / %d racial / %d class / %d custom.  Mix: %s',#u,#r,#k,#c,mix))
 end
 A.exampleItemNames = {
   healthstone='Healthstone', potion='Minor Healing Potion', drink='Ice Cold Milk',
@@ -410,7 +426,7 @@ function A:RefreshDefaultLibrary()
   for _,row in ipairs(self.libraryRows or {}) do row:Hide() end
   self.libraryRows=self.libraryRows or {}
   if not self.selectedID then return end
-  local u,r,k=self:GetLibraryEntries(self.selectedID,'en',self.activeChannel or 'me',self.activeTab=='last')
+  local u,r,k=self:GetLibraryEntries(self.selectedID,self.db.language or 'en',self.activeChannel or 'say',self.activeTab=='last')
   local _,info=self:GetPlayerRace()
   local y,n=0,0
   local function nextRow()
@@ -432,7 +448,7 @@ function A:RefreshDefaultLibrary()
         self.inner:SetColorTexture(.25,.33,.39,1)
         if row.entry and GameTooltip then
           GameTooltip:SetOwner(self,'ANCHOR_RIGHT')
-          GameTooltip:SetText('ON = active; OFF = disabled for every item in this category and phrase pool.')
+          GameTooltip:SetText(tr('ON = active; OFF = disabled for every item in this category and phrase pool.'))
           GameTooltip:Show()
         end
       end)
@@ -458,7 +474,7 @@ function A:RefreshDefaultLibrary()
     for _,entry in ipairs(entries) do
       local item=nextRow();item.entry=entry
       local enabled=not self:IsDefaultDisabled(entry.id)
-      item.status:Show();item.status:SetText(enabled and 'ON' or 'OFF')
+      item.status:Show();item.status:SetText(tr(enabled and 'ON' or 'OFF'))
       item.statusText:SetTextColor(enabled and .55 or .70,enabled and .85 or .57,enabled and .63 or .48)
       local class=self:GetPlayerClass()
       local color=(index==2 and info and info.color) or (index==3 and class and self.Classes[class].color) or {1,1,1}
@@ -473,9 +489,9 @@ function A:RefreshDefaultLibrary()
     end
   end
   local cfg=self.db.items[self.selectedID]
-  local field=self:PhraseField('en',self.activeChannel or 'me',self.activeTab=='last')
+  local field=self:PhraseField(self.db.language or 'en',self.activeChannel or 'say',self.activeTab=='last')
   if type(cfg.libraryLegacyEmpty)=='table' and cfg.libraryLegacyEmpty[field] then
-    local row=nextRow();row.status:Hide();row.display:SetText('Legacy empty-pool opt-out: click to enable defaults for this item/pool.')
+    local row=nextRow();row.status:Hide();row.display:SetText(tr('Legacy empty-pool opt-out: click to enable defaults for this item/pool.'))
     row.display:SetTextColor(.78,.81,.82)
     row:SetHeight(44);y=y+14
     row:SetScript('OnClick',function() cfg.libraryLegacyEmpty[field]=nil;A:RefreshDefaultLibrary();A:RefreshTextInfo() end)
@@ -489,24 +505,20 @@ function A:RefreshDetails()
   if cfg then
     local meta = self.inventory[self.selectedID]
     self.nameHeader:SetText(nameFor(self.selectedID, cfg, meta))
-    self.itemMeta:SetText('ID: ' .. self.selectedID .. '    |    In bags: ' ..
-      (meta and meta.count or 0) .. '    |    English')
+    self.itemMeta:SetText(tr('ID: %d    |    In bags: %d    |    %s',self.selectedID,meta and meta.count or 0,tr(self.LanguageNames and self.LanguageNames[self.db.language] or 'English')))
     local category, method = self:GetCategory(self.selectedID)
-    self.categoryInfo:SetText('Detected: ' .. (self.categoryNames[category] or 'Other') ..
-      ' (' .. tostring(method) .. ')')
+    self.categoryInfo:SetText(tr('Detected: %s (%s)',tr(self.categoryNames[category] or 'Other'),tr(tostring(method))))
     self.categoryDropdown:SetCaption(self.categoryNames[category] or 'Other')
-    local scope = cfg.scopeOverride
-    self.itemScopeDropdown:SetCaption(scope and self.ScopeNames[scope] or 'Use global setting')
-    self.modeDropdown:SetCaption(self.OutputModes[cfg.outputMode] or self.OutputModes.me)
+    local scope = cfg.groupScopeOverride
+    self.itemScopeDropdown:SetCaption(scope and self.GroupScopeNames[scope] or 'Use global setting')
     self.stockCheck:SetChecked(not not cfg.outOfStockEnabled)
     self.stockCheck:SetEnabled(self.selectedID ~= 6948)
   else
-    self.nameHeader:SetText('Select an item from the left')
-    self.itemMeta:SetText('')
-    self.categoryInfo:SetText('')
+    self.nameHeader:SetText(tr('Select an item from the left'))
+    self.itemMeta:SetText(tr(''))
+    self.categoryInfo:SetText(tr(''))
     self.categoryDropdown:SetCaption('Category')
     self.itemScopeDropdown:SetCaption('Use global setting')
-    self.modeDropdown:SetCaption('Only /me')
   end
   for tab, b in pairs(self.tabButtons or {}) do
     b:SetSelected(tab == self.activeTab)
@@ -518,20 +530,26 @@ function A:RefreshDetails()
   end
   self.editorPane:Show()
   if self.customEditorTitle then
-    self.customEditorTitle:SetText((cfg and nameFor(self.selectedID,cfg,self.inventory[self.selectedID]) or 'Select an item')..
-      ' - '..(self.activeTab=='last' and 'Last Item' or 'Regular')..' /'..(self.activeChannel or 'me'))
+    self.customEditorTitle:SetText(tr('%s - %s group speech',cfg and nameFor(self.selectedID,cfg,self.inventory[self.selectedID]) or tr('Select an item'),tr(self.activeTab=='last' and 'Last Item' or 'Regular')))
   end
   self:RefreshDefaultLibrary()
   self:RefreshTextInfo()
 end
 function A:RefreshConfig()
   if not self.configFrame then return end
+  if self.IsQuestItem and self.selectedID and self:IsQuestItem(self.selectedID) then
+    self:RememberEditorDraft()
+    self:ArchiveQuestDraft()
+    self.selectedID=nil; self.editorDirty=false
+    self:ReloadEditor()
+  end
   local rows = self:ConfigItems()
   self.configRows = rows
-  self.summaryText:SetText(#rows .. ' shown / ' .. self:CountRemembered() .. ' remembered')
-  self.globalScopeDropdown:SetCaption(self.ScopeNames[self.db.defaultScope] or 'Only in groups')
+  self.summaryText:SetText(tr('%d shown / %d remembered',#rows,self:CountRemembered()))
+  if self.languageDropdown and self.LanguageCaption then self.languageDropdown:SetCaption(self:LanguageCaption()) end
+  self.globalScopeDropdown:SetCaption(self.GroupScopeNames[self.db.groupScope] or 'Groups (all)')
   local cd = self.db.globalCooldown or 30
-  self.cooldownDropdown:SetCaption(cd == 0 and 'Disabled' or (cd .. ' seconds'))
+  self.cooldownDropdown:SetCaption(cd == 0 and 'Disabled' or tr('%d seconds',cd))
   self.autoCheck:SetChecked(self.db.auto)
   self.minimapCheck:SetChecked(self.db.showMinimap)
   self.filterDropdown:SetCaption(({all='All items', inbags='In bags', enabled='Enabled',
@@ -541,7 +559,7 @@ function A:RefreshConfig()
     local row = self.listButtons[i]
     if not row then row = self:NewInventoryRow(self.listContent, i); self.listButtons[i]=row end
     row.itemID, row.fullName = entry.id, entry.title
-    row.statusText:SetText(entry.cfg.enabled and 'ON' or 'OFF')
+    row.statusText:SetText(tr(entry.cfg.enabled and 'ON' or 'OFF'))
     row.statusText:SetTextColor(entry.cfg.enabled and 0.37 or 0.7, entry.cfg.enabled and 0.94 or 0.7, entry.cfg.enabled and 0.58 or 0.7)
     fitName(row.name, entry.title, 142, row.measurer)
     row.quantity:SetText(entry.count > 0 and ('x' .. entry.count) or '--')
@@ -557,6 +575,8 @@ function A:RefreshConfig()
 end
 
 function A:BuildConfig()
+  self.localizedWidgets={}
+  if self.InitGroupSettings then self:InitGroupSettings() end
   local f=CreateFrame('Frame','ForeverRPConfigFrame',UIParent)
   f:SetSize(1050,760)
   f:SetPoint('CENTER')
@@ -573,10 +593,11 @@ function A:BuildConfig()
   local background=f:CreateTexture(nil,'BACKGROUND')
   background:SetAllPoints(f)
   background:SetTexture('Interface\\AddOns\\ForeverRP\\Media\\ForeverRP_Background.tga')
+  background:SetAlpha(.90) -- Background only; keep text and controls fully opaque.
   f:Hide()
   self.configFrame=f
   self.activeTab='regular'
-  self.activeChannel='me'
+  self.activeChannel='say'
   self.editorDirty=false
   self.listButtons={}
 
@@ -586,19 +607,25 @@ function A:BuildConfig()
   icon:SetTexture('Interface\\AddOns\\ForeverRP\\Media\\ForeverRP_Icon.tga')
   label(f,'FOREVER RP    |    v'..tostring(A.version or 'unknown'),73,-18,'GameFontNormal')
   button(f,'X',26,25,1005,-13,function() f:Hide() end)
+  if self.SetLanguageMode then
+    label(f,'Language',735,-18)
+    self.languageDropdown=dropdown(f,811,-9,184,self:LanguageCaption(),function()
+      return {{key='auto',label='Automatic'},{key='en',label='English'},{key='de',label='Deutsch'}}
+    end,function(value) A:SetLanguageMode(value);A:RefreshConfig() end,function() return A.db.languageMode or 'auto' end)
+  end
   label(f,'GLOBAL SETTINGS',20,-92,'GameFontNormalLarge')
   surface(f,17,-111,293,143,{.16,.21,.27,.88},{.46,.38,.24,.52})
   self.autoCheck=CreateFrame('CheckButton',nil,f,'UICheckButtonTemplate')
   self.autoCheck:SetPoint('TOPLEFT',f,'TOPLEFT',20,-114)
   label(f,'Enable automatic RP',53,-121)
   self.autoCheck:SetScript('OnClick',function(c) A.db.auto=not not c:GetChecked() end)
-  label(f,'Output',24,-157)
-  self.globalScopeDropdown=dropdown(f,112,-145,184,'Only in groups',function()
+  label(f,'Send in',24,-157)
+  self.globalScopeDropdown=dropdown(f,112,-145,184,'Groups (all)',function()
     local result={}
-    for _,value in ipairs(A.ScopeOrder) do result[#result+1]={key=value,label=A.ScopeNames[value]} end
+    for _,value in ipairs(A.GroupScopeOrder) do result[#result+1]={key=value,label=A.GroupScopeNames[value]} end
     return result
-  end,function(value) A.db.defaultScope=value; A:RefreshConfig() end,
-    function() return A.db.defaultScope end)
+  end,function(value) A.db.groupScope=value; A:RefreshConfig() end,
+    function() return A.db.groupScope end)
   label(f,'Cooldown',24,-188)
   self.cooldownDropdown=dropdown(f,112,-176,184,'30 seconds',function()
     return {{key=0,label='Disabled'},{key=15,label='15 seconds'},
@@ -617,7 +644,7 @@ function A:BuildConfig()
   self.summaryText=label(f,'',20,-293)
   button(f,'Rescan Bags',119,25,191,-280,function()
     A:ResetInventory(); A:RefreshConfig()
-    A.editorStatus:SetText('Bags rescanned. No RP emitted.')
+    A.editorStatus:SetText(tr('Bags rescanned. No RP emitted.'))
   end)
   label(f,'Find',20,-331)
   self.searchBox=CreateFrame('EditBox',nil,f,'InputBoxTemplate')
@@ -679,18 +706,18 @@ function A:BuildConfig()
     local cfg=A.selectedID and A.db.items[A.selectedID]
     return (cfg and cfg.categoryOverride) or 'auto'
   end)
-  label(f,'Output scope',655,-126)
+  label(f,'Send in',675,-126)
   self.itemScopeDropdown=dropdown(f,755,-115,248,'Use global setting',function()
     local r={{key='inherit',label='Use global setting'}}
-    for _,k in ipairs(A.ScopeOrder) do r[#r+1]={key=k,label=A.ScopeNames[k]} end
+    for _,k in ipairs(A.GroupScopeOrder) do r[#r+1]={key=k,label=A.GroupScopeNames[k]} end
     return r
   end,function(value)
     if not A.selectedID then return end
-    A.db.items[A.selectedID].scopeOverride=(value=='inherit') and nil or value
+    A.db.items[A.selectedID].groupScopeOverride=(value=='inherit') and nil or value
     A:RefreshDetails()
   end,function()
     local cfg=A.selectedID and A.db.items[A.selectedID]
-    return (cfg and cfg.scopeOverride) or 'inherit'
+    return (cfg and cfg.groupScopeOverride) or 'inherit'
   end)
   -- Regular RP ON/OFF is toggled in the inventory row (no duplicate checkbox).
   self.stockCheck=CreateFrame('CheckButton',nil,f,'UICheckButtonTemplate')
@@ -701,22 +728,9 @@ function A:BuildConfig()
     local cfg=A.db.items[A.selectedID]
     cfg.outOfStockEnabled=(A.selectedID~=6948 and not not c:GetChecked())
     A:RefreshDetails()
-    A.editorStatus:SetText('Last-item RP ' .. (cfg.outOfStockEnabled and 'enabled' or 'disabled') ..
-      '. Choose Last Item and add phrases if needed.')
+    A.editorStatus:SetText(tr('Last-item RP %s. Choose Last Item and add phrases if needed.',tr(cfg.outOfStockEnabled and 'enabled' or 'disabled')))
   end)
-  label(f,'Mode',760,-159)
-  self.modeDropdown=dropdown(f,808,-147,197,'Only /me',function()
-    local r={}
-    for _,k in ipairs(A.OutputOrder) do r[#r+1]={key=k,label=A.OutputModes[k]} end
-    return r
-  end,function(value)
-    if not A.selectedID then return end
-    A.db.items[A.selectedID].outputMode=value
-    A:RefreshDetails()
-  end,function()
-    local cfg=A.selectedID and A.db.items[A.selectedID]
-    return (cfg and cfg.outputMode) or 'me'
-  end)
+  label(f,'Group speech only - channel selected automatically',655,-159)
   self.textCount=label(f,'',345,-192)
   self.textCount:SetWidth(657)
 
@@ -727,8 +741,7 @@ function A:BuildConfig()
   self.tabButtons.last=navTab(f,'Last Item RP',554,-237,208,32,function() A:SwitchTab('last') end)
   label(f,'Defaults are active automatically',773,-248)
   self.channelButtons={}
-  self.channelButtons.me=navTab(f,'/me',346,-277,107,25,function() A:SwitchChannel('me') end,true)
-  self.channelButtons.say=navTab(f,'/say',456,-277,107,25,function() A:SwitchChannel('say') end,true)
+  label(f,'Group speech',346,-283)
   label(f,'{item} inserts an item link (optional)',580,-283)
 
   -- One shared region switches content without ever hiding the inventory.
@@ -752,8 +765,7 @@ function A:BuildConfig()
   self.customChannelButtons={}
   self.customTabButtons.regular=navTab(custom,'Regular RP',18,-48,160,30,function() A:SwitchTab('regular') end)
   self.customTabButtons.last=navTab(custom,'Last Item RP',180,-48,160,30,function() A:SwitchTab('last') end)
-  self.customChannelButtons.me=navTab(custom,'/me',365,-48,100,30,function() A:SwitchChannel('me') end,true)
-  self.customChannelButtons.say=navTab(custom,'/say',467,-48,100,30,function() A:SwitchChannel('say') end,true)
+  label(custom,'Group speech',365,-58)
   local editorBorder=CreateFrame('Frame',nil,custom)
   editorBorder:SetPoint('TOPLEFT',custom,'TOPLEFT',18,-90)
   editorBorder:SetSize(662,280)
@@ -861,22 +873,22 @@ function A:BuildConfig()
     if not A.selectedID then return end
     local currentMeta=A.inventory and A.inventory[A.selectedID]
     local lines,err=A:ParseLines(A.textEditor:GetText(),currentMeta and currentMeta.link)
-    if not lines or #lines==0 then A.editorStatus:SetText(err or 'Please enter a phrase.');return end
+    if not lines or #lines==0 then A.editorStatus:SetText(err or tr('Please enter a phrase.'));return end
     local meta=A.inventory[A.selectedID]
     local link=meta and meta.link or ('[Item '..A.selectedID..']')
     local phrase=lines[math.random(#lines)]:gsub('{item}',function()return link end)
-    A:Say('LOCAL /'..A.activeChannel..' preview ONLY: '..phrase)
+    A:Say(tr('LOCAL group speech preview ONLY: %s',phrase))
   end)
   label(custom,'Auto-save after 0.7s. Enter = new phrase; {item} optional.',170,-389):SetWidth(506)
 
   self.recoverCustomButton=button(custom,'Edit preserved matches as own texts',270,23,18,-421,function()
     if not A.selectedID or not A:SaveEditor() then return end
     local cfg=A.db.items[A.selectedID]
-    local raw=A:GetPhrases(cfg,'en',A.activeChannel or 'me',A.activeTab=='last')
+    local raw=A:GetPhrases(cfg,A.db.language or 'en',A.activeChannel or 'me',A.activeTab=='last')
     A.loadingEditor=true;A.textEditor:SetText(formatLines(raw));A.loadingEditor=false
     A.editorDirty=true
     A:RememberEditorDraft()
-    A.editorStatus:SetText('Preserved matches shown. Saving explicitly claims these as own texts, independent of default disables.')
+    A.editorStatus:SetText(tr('Preserved matches shown. Saving explicitly claims these as own texts, independent of default disables.'))
   end)
   local libraryScroll=CreateFrame('ScrollFrame',nil,editorPane,'UIPanelScrollFrameTemplate')
   libraryScroll:SetPoint('TOPLEFT',editorPane,'TOPLEFT',0,-40)
@@ -888,7 +900,7 @@ function A:BuildConfig()
   self.editorStatus=label(custom,'Valid edits save automatically. Invalid drafts are preserved on reload.',18,-465)
   self.editorStatus:SetWidth(652)
   self.editorStatus:SetJustifyH('LEFT')
-  label(f,'/say may be restricted by the client; /me remains the preferred RP output.',345,-685):SetWidth(650)
+  label(f,'Automatic group speech: PARTY / RAID / INSTANCE_CHAT. No output while solo.',345,-685):SetWidth(650)
   label(f,'Consumption: successful spell + bag decrease. Last item replaces regular RP.',345,-709):SetWidth(650)
   -- An invalid unsaved draft must never vanish silently on close or ESC.
   -- Show the native WoW confirmation; users explicitly choose discard vs edit.
@@ -897,9 +909,9 @@ function A:BuildConfig()
     if type(StaticPopupDialogs)=='table' and type(StaticPopup_Show)=='function' then
       if not StaticPopupDialogs.FOREVERRP_DISCARD_INVALID then
         StaticPopupDialogs.FOREVERRP_DISCARD_INVALID={
-          text='Forever RP: Your current text has an error and was not saved. Discard these unsaved changes?',
-          button1='Discard changes',
-          button2='Keep editing',
+          text=tr('Forever RP: Your current text has an error and was not saved. Discard these unsaved changes?'),
+          button1=tr('Discard changes'),
+          button2=tr('Keep editing'),
           OnAccept=function()
             A.editorDirty=false
             A.db.editorDraft=nil

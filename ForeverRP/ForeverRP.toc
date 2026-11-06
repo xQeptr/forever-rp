@@ -1,13 +1,15 @@
 ## Interface: 120105
-## Title: Forever RP - Item Emotes
-## Notes: Immersive RP emotes for consumables and Hearthstones. Configurable templates and scopes.
+## Title: Forever RP - Group Speech
+## Notes: Automatic RP speech for group, dungeon and raid chat. Custom texts and Last Item support.
 ## Author: Forever RP / ChatGPT
-## Version: 0.9.20-beta-retail-beta
+## Version: 0.10.0-retail-beta
 ## IconTexture: Interface\AddOns\ForeverRP\Media\ForeverRP_Icon.tga
 ## AddonCompartmentFunc: ForeverRP_OnAddonCompartmentClick
 ## SavedVariablesPerCharacter: ForeverRPDB
 Core.lua
+Localization.lua
 Compat.lua
+QuestItems.lua
 Categories.lua
 Samples.lua
 LocalizedSamples.lua
@@ -19,6 +21,9 @@ RaceLibrary.lua
 Classes.lua
 IdentityLibrary.lua
 EditorialLibrary.lua
+GroupSpeechLibrary.lua
+IdentitySpeechLibrary.lua
+GermanSpeechLibrary.lua
 Library.lua
 Inventory.lua
 Scopes.lua

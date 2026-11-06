@@ -97,37 +97,58 @@ function A:GetCustomPhrases(id,lang,ch,stock)
   return custom
 end
 function A:PickLibrary(id,lang,ch,stock)
+  self.lastLibrarySource=nil
   local u,r,k,c=self:GetLibrarySources(id,lang,ch,stock)
+  local originals={universal=u,race=r,class=k,custom=c}
+  local key=tostring(id)..':'..lang..':'..ch..':'..tostring(not not stock)
+  local sharedKey=lang..':'..ch
+  self.libraryPrevious=self.libraryPrevious or {}
+  self.libraryLastText=self.libraryLastText or {}
+  local previous,sharedPrevious=self.libraryPrevious[key],self.libraryLastText[sharedKey]
+  local function eligible(avoidItem)
+    local result={{},{},{},{}}
+    for n,pool in ipairs({u,r,k,c}) do
+      for _,text in ipairs(pool) do
+        if text~=sharedPrevious and (not avoidItem or text~=previous) then
+          result[n][#result[n]+1]=text
+        end
+      end
+    end
+    return result
+  end
+  -- Remove repeated text before choosing the source, rather than rerouting an
+  -- already chosen class/race result to general text. With usable pools this
+  -- preserves the nominal 50/30/20 source probabilities.
+  local pools=eligible(true)
+  local function size(p) return #p[1]+#p[2]+#p[3]+#p[4] end
+  local avoidItem,avoidShared=true,true
+  if size(pools)==0 then pools=eligible(false);avoidItem=false end
+  if size(pools)==0 then pools={u,r,k,c};avoidShared=false end -- a single remaining phrase must still work
+  u,r,k,c=pools[1],pools[2],pools[3],pools[4]
   local defaults=#u+#r+#k
-  -- Each custom phrase has the same aggregate chance as one default phrase.
-  -- Conditional on choosing defaults, preserve the 70:30 source split.
   local pool,source
+  -- Preserve custom-text ticket weighting independently of default-source mix.
   if #c>0 and (defaults==0 or math.random(defaults+#c)<=#c) then pool,source=c,'custom'
   else
     local choices={{u,'universal',50},{r,'race',30},{k,'class',20}}
     local total=0
-    for _,v in ipairs(choices) do if #v[1]>0 then total=total+v[3] end end
+    for _,choice in ipairs(choices) do if #choice[1]>0 then total=total+choice[3] end end
     if total>0 then
       local draw=math.random(total)
-      for _,v in ipairs(choices) do if #v[1]>0 then draw=draw-v[3];if draw<=0 then pool,source=v[1],v[2];break end end end
-    end
-  end
-  if not pool then return nil end
-  local key=tostring(id)..':'..lang..':'..ch..':'..tostring(not not stock)
-  self.libraryPrevious=self.libraryPrevious or {}
-  local previous=self.libraryPrevious[key]
-  -- If users leave only one line in a source, no-repeat takes precedence when
-  -- another source is available. Normal shipped racial pools have >=2 lines.
-  if #pool==1 and pool[1]==previous then
-    for _,candidate in ipairs({{u,'universal'},{r,'race'},{k,'class'},{c,'custom'}}) do
-      if #candidate[1]>0 and (#candidate[1]>1 or candidate[1][1]~=previous) then
-        pool,source=candidate[1],candidate[2];break
+      for _,choice in ipairs(choices) do
+        if #choice[1]>0 then
+          draw=draw-choice[3]
+          if draw<=0 then pool,source=choice[1],choice[2];break end
+        end
       end
     end
   end
-  local line=self:Pick(tostring(id)..':'..source,pool,lang,ch,stock,previous)
+  if not pool then return nil end
+  local line=self:Pick(tostring(id)..':'..source,originals[source],lang,ch,stock,avoidShared and sharedPrevious or nil,avoidItem and previous or nil)
   self.libraryPrevious[key]=line
-  return line
+  self.libraryLastText[sharedKey]=line
+  self.lastLibrarySource=source
+  return line,source
 end
 
 -- Editing custom text never deletes unproven legacy imports from SavedVariables.

@@ -12,6 +12,9 @@ C_Item={GetItemSpell=function(id)if not missing then return 'Use',111 end end,
  GetItemInfoInstant=function()return nil,nil,nil,nil,nil,0,1 end}
 for _,name in ipairs({'Core','Categories','Inventory','Scopes','Emotes','Samples','LocalizedSamples','ExtendedSamples','AlcoholSamples','StockSamples','DefaultLibrary','RaceLibrary','Library','Config'})do dofile('ForeverRP/'..name..'.lua')end
 local a=ForeverRP
+a.SendForItem=a.SendLegacyForItem
+a.CanSendInContext=a.CanSendLegacyInContext
+a.GetGroupSpeechChannels=a.GetAvailableChannels
 a.SetupMinimap=function()end
 local function item(id,n)return {itemID=id,stackCount=n,hyperlink=not missing and '|Hitem:'..id..'|h[Item]|h' or nil}end
 local sends={}
@@ -19,7 +22,7 @@ local realSendForItem=a.SendForItem
 a.SendForItem=function(_,id,link,stock)sends[#sends+1]={id=id,stock=stock}end
 local function reset()
  clock=clock+10;missing=false;bags={[0]={item(118,2)}}
- ForeverRPDB={items={[118]={enabled=true,outOfStockEnabled=true}},defaultScope='always'}
+ ForeverRPDB={chatDestination="local",items={[118]={enabled=true,outOfStockEnabled=true}},defaultScope='always'}
  a:Init();for _,e in ipairs(a.DefaultEntries)do a:SetDefaultDisabled(e.id,true)end;a.lastCastGUID=nil;a.lastCastSpell=nil;a.lastConfirmedID=nil;sends={}
 end
 for _,first in ipairs({'bag','spell'})do
@@ -128,3 +131,16 @@ for _,language in ipairs({'en','de'})do
  end
 end
 io.write('PASS blank/mixed persisted pools: regular/Last Item, both languages/channels, direct/event/scanner\n')
+
+-- Ambiguity diagnostics must not show a stale successful send from another use.
+reset();bags[0]={item(118,2),item(119,2)};a:ResetInventory()
+a.last.echo='observed';a.last.channel='say';a.last.text='stale'
+a.lastProbe={at=clock,observed=false}
+a:OnSpellSucceeded('trace-ambiguous',111)
+assert(a.last.spellID==111 and a.last.echo=='none' and a.last.channel==nil and a.last.text==nil and a.lastProbe==nil)
+local trace={};a.Say=function(_,text)trace[#trace+1]=text end;a.db.debug=true
+local previousStamp=a.db.globalLastEmoteAt
+a:TraceItemCandidates(111,{[118]=true,[119]=true},'test')
+assert(#trace==3 and trace[2]:find('item=118',1,true) and trace[3]:find('item=119',1,true))
+assert(a.db.globalLastEmoteAt==previousStamp,'diagnostics spent cooldown')
+print('PASS bounded ambiguity diagnostics and fresh status')

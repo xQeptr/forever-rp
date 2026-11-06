@@ -20,9 +20,20 @@ jobs:
           lua5.4 tests/mock_ui.lua
           lua5.4 tests/mock_events.lua
           lua5.4 tests/mock_scanner.lua
+          lua5.4 tests/mock_quest_items.lua
+          lua5.4 tests/mock_quest_ui.lua
           lua5.4 tests/mock_library.lua
           lua5.4 tests/mock_text_quality.lua
           lua5.4 tests/mock_identity.lua
+          lua5.4 tests/mock_identity_speech.lua
+          lua5.4 tests/mock_manual_chat.lua
+          lua5.4 tests/mock_group_chat.lua
+          lua5.4 tests/mock_group_speech.lua
+          lua5.4 tests/mock_group_ui.lua
+          lua5.4 tests/mock_item_source.lua
+          lua5.4 tests/mock_localization.lua
+          lua5.4 tests/mock_localization_ui.lua
+          lua5.4 tests/mock_german_speech.lua
       - name: Build Retail and Forever packages
         env:
           RELEASE_VERSION: ${{ github.event.release.tag_name }}

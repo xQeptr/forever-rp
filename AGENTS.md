@@ -16,7 +16,7 @@ Applies to the entire repository. Keep changes focused on the requested task; pr
 ## Retail and Forever builds
 - Use one source tree; do not maintain divergent copies of addon logic.
 - Current package targets: Retail interface `120105`, suffix `retail-beta`; Forever interface `16001`, suffix `forever-preview`. These are repository targets, not proof of runtime compatibility.
-- Run `python3 tools/package.py --version 0.9.20-beta` from the repository root (or the explicitly requested release version; Python 3.9+). It writes both archives to `dist/`.
+- Run `python3 tools/package.py --version 0.10.0` from the repository root (or the explicitly requested release version; Python 3.9+). It writes both archives to `dist/`.
 - Packaging rewrites TOC Interface/Version and `A.version` in packaged Core.lua. Other source behavior must stay identical across flavors. Each archive must contain `ForeverRP/ForeverRP.toc` at the installable folder level.
 - Do not commit generated ZIPs, change interface numbers, bump versions or publish releases as an incidental part of a fix.
 - Forever is a Mainline-architecture candidate, not automatically a Classic API target. Verify capabilities and actual client behavior; keep beta/preview and unverified-delivery wording accurate.
@@ -52,7 +52,7 @@ Run relevant checks from the repository root. CI currently uses Lua 5.4:
 - Syntax: `find ForeverRP -name '*.lua' -print0 | xargs -0 -n1 luac5.4 -p` on Linux; on Windows invoke an available equivalent `luac -p` once per Lua file.
 - UI simulation: `lua5.4 tests/mock_ui.lua`.
 - Event simulation: `lua5.4 tests/mock_events.lua`.
-- Both packages: `python3 tools/package.py --version 0.9.20-beta`; inspect archive paths and flavor metadata. A locally installed Lua executable may be named `lua`.
+- Both packages: `python3 tools/package.py --version 0.10.0`; inspect archive paths and flavor metadata. A locally installed Lua executable may be named `lua`.
 - Add focused regression cases for changed behavior, especially migrations, event order, false consumption, Last Item replacement, cross-item cooldowns and Hearthstone interruptions. For UI changes cover autosave, item/tab/channel switches and invalid-draft preservation.
 - For documentation-only changes inspect the diff, paths and commands; do not invent test results or add tests that merely restate documentation.
 - When runtime behavior changes, manually verify both clients with `/frp compat`, `/frp status`, scopes, reload persistence, interruption and a second player's observation of /me and /say. Record client/build and what remains untested. Existing README explicitly leaves real /say delivery and Forever item behavior unverified.
